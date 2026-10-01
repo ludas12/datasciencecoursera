@@ -11,6 +11,7 @@ WORK=/group/sbms001/hludewick/Fragmentomics
 REF=$WORK/ref/hg38.fa                      # needs bwa-mem2 index + .fai
 BLACKLIST=$WORK/ref/hg38-blacklist.v2.bed
 OUT=$WORK/results
+export UMI_LEN=8      # 8 bp in-line block at the start of R1 and R2 (see FastQC per-base content)
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate cfdna-frag
