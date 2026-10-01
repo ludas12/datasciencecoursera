@@ -1,0 +1,15 @@
+name: cfdna-frag
+channels: [conda-forge, bioconda]
+dependencies:
+  - python>=3.10
+  - pysam
+  - numpy
+  - pandas
+  - statsmodels
+  - matplotlib
+  - samtools>=1.16
+  - bwa-mem2
+  - fastp
+  # optional, for tumour fraction / CNA (scripts/02_ichorcna.sh)
+  - hmmcopy
+  - r-ichorcna
