@@ -30,7 +30,7 @@ python fragmentomics/cfdna_frag.py extract -b bam/S1.bam -r hg38.fa \
 python fragmentomics/cfdna_frag.py features -f frags/S1.frags.tsv.gz -r hg38.fa -o features/S1
 
 # 4. Merge all samples
-python fragmentomics/cfdna_frag.py cohort -i features/* -o cohort/
+python fragmentomics/cfdna_frag.py cohort -i features/* -s samples.tsv -o cohort/
 
 # Optional: tumour fraction / copy number
 scripts/02_ichorcna.sh S1 bam/S1.bam ichor/
@@ -47,6 +47,49 @@ scripts/02_ichorcna.sh S1 bam/S1.bam ichor/
 
 `cohort/` contains sample × feature matrices (`size_motif_summary.tsv`, `delfi_short_long_ratio.tsv`,
 `end_motif_freq.tsv`, `coverage_norm.tsv`) — only bins passing QC in every sample are kept.
+
+## This study: lung transplant plasma + BAL (6 samples, IDT xGen cfDNA & FFPE)
+
+`samples.tsv` is filled in for the current run (HC7/HC8 healthy plasma; CF0020A and CF0007C
+transplant plasma + BAL from the same patients). Replace `FASTQ_DIR` with the real path:
+
+```bash
+sed -i "s|FASTQ_DIR|/path/to/fastq|g" samples.tsv
+```
+
+**1. Check the FastQC reports first**
+```bash
+python scripts/00_fastqc_summary.py /path/to/fastqc > fastqc_summary.tsv
+```
+Look at `max_cycle_bias_1to10` and `first10_*`. A strong composition bias in the first few cycles
+(especially on R2) means the library prep added non-templated bases at read starts. Read starts
+are the fragment ends, so those bases would distort fragment lengths and end motifs.
+Check the IDT xGen cfDNA & FFPE analysis guide for any recommended trimming, and trim with fastp
+`--trim_front1/--trim_front2` if it applies. Also check the guide for where the UMIs are: if they
+are in the index read, normal duplicate marking is fine at this depth.
+
+**2. Run everything** (on Kaya, inside an `sbatch` job or `salloc` session):
+```bash
+#!/bin/bash
+#SBATCH --job-name=cfdna-frag --cpus-per-task=16 --mem=48G --time=12:00:00
+conda activate cfdna-frag
+scripts/run_all.sh samples.tsv /ref/hg38.fa /ref/hg38-blacklist.v2.bed results 16
+```
+Outputs in `results/cohort/`: `size_distribution.png`, `pca.png`, `delfi_ratio_heatmap.png`,
+`size_motif_summary.tsv` (one row per sample), `group_summary.tsv`, `alignment_qc.tsv`.
+
+**What to expect / how to interpret**
+- **n = 2 per group:** treat this as descriptive / pilot data. Show distributions and per-sample
+  values; don't run classifiers or p-values across groups.
+- **BAL vs plasma is a different matrix, not just a different group.** BAL cfDNA comes from local
+  lung cells, immune cells and microbes. It often has more long fragments and a lower human
+  mapping rate (check `alignment_qc.tsv`). Compare BAL to plasma within a patient
+  (CF0020A_P vs CF0020A_BAL), not as two independent groups.
+- **Donor-derived DNA:** if a donor and recipient are sex-mismatched (e.g. male donor, female
+  recipient), `frac_chrY` in `size_motif_summary.tsv` estimates donor fraction:
+  `donor_fraction ≈ frac_chrY(sample) / frac_chrY(male control)`. Calibrate with a known male
+  sample processed the same way. HC7/HC8 are useful here if one of them is male.
+- **ichorCNA** estimates *tumour* fraction; it is not meaningful for transplant samples.
 
 ## Low-coverage notes
 - **Depth needed:** size distribution and end motifs are stable from ~1M fragments. DELFI ratios at

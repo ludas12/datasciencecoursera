@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 
 AUTOSOMES = r"^(chr)?([1-9]|1[0-9]|2[0-2])$"
+AUTOSOMES_XY = r"^(chr)?([1-9]|1[0-9]|2[0-2]|X|Y)$"
 MOTIFS = ["".join(p) for p in itertools.product("ACGT", repeat=4)]
 COMP = str.maketrans("ACGTN", "TGCAN")
 
@@ -221,11 +222,18 @@ def features(args):
     frags = pd.read_csv(args.fragments, sep="\t",
                         dtype={"chrom": str, "motif_5p": str, "motif_3p": str})
     frags = frags[frags.length.between(args.min_len, args.max_len)]
-    log(f"{name}: {len(frags):,} fragments")
+
+    # Sex-chromosome fractions. In a sex-mismatched transplant (male donor -> female recipient)
+    # the chrY fraction relative to male controls approximates the donor-derived fraction.
+    chrom = frags.chrom.str.replace("^chr", "", regex=True)
+    sex = {"frac_chrX": float((chrom == "X").mean()), "frac_chrY": float((chrom == "Y").mean())}
+    frags = frags[frags.chrom.str.match(args.chroms)]
+    log(f"{name}: {len(frags):,} fragments on autosomes")
 
     hist, summary = size_features(frags.length.values)
     motif_freq, mds = motif_features(frags)
     summary["motif_diversity_score"] = mds
+    summary.update(sex)
     for m in ("CCCA", "CCAG", "CCTG", "TGGG"):  # motifs often reported shifted in cancer
         summary[f"motif_{m}"] = float(motif_freq[m])
     bins = bin_features(frags, args.bin_size, args.reference + ".fai", args.chroms)
@@ -263,28 +271,74 @@ def cohort(args):
         hists[name] = h / h.sum()
 
     summary = pd.DataFrame(summaries).set_index("sample")
+    groups = pd.Series("all", index=summary.index, name="group")
+    if args.samples:
+        sheet = pd.read_csv(args.samples, sep="\t", dtype=str).set_index("sample")
+        missing = set(summary.index) - set(sheet.index)
+        if missing:
+            sys.exit(f"Samples missing from {args.samples}: {sorted(missing)}")
+        groups = sheet.loc[summary.index, "group"]
+    order = groups.sort_values(kind="stable").index
+    summary = summary.loc[order]
+    summary.insert(0, "group", groups.loc[order])
     # keep bins that pass in every sample so the matrix is complete for modelling
-    ratio_m = pd.DataFrame(ratios).dropna().T
-    cov_m = pd.DataFrame(covs).loc[ratio_m.columns].T
-    motif_m = pd.DataFrame(motifs).T
+    ratio_m = pd.DataFrame(ratios).dropna().T.loc[order]
+    cov_m = pd.DataFrame(covs).loc[ratio_m.columns].T.loc[order]
+    motif_m = pd.DataFrame(motifs).T.loc[order]
 
     summary.to_csv(f"{args.out}/size_motif_summary.tsv", sep="\t")
     ratio_m.to_csv(f"{args.out}/delfi_short_long_ratio.tsv", sep="\t", float_format="%.5g")
     cov_m.to_csv(f"{args.out}/coverage_norm.tsv", sep="\t", float_format="%.5g")
     motif_m.to_csv(f"{args.out}/end_motif_freq.tsv", sep="\t", float_format="%.6g")
+    num = summary.drop(columns="group").select_dtypes("number")
+    num.groupby(summary.group).agg(["mean", "min", "max"]).T.to_csv(
+        f"{args.out}/group_summary.tsv", sep="\t", float_format="%.5g")
     log(f"{len(summary)} samples, {ratio_m.shape[1]} bins shared")
 
     # -- plots
-    fig, ax = plt.subplots(figsize=(7, 4))
-    for name, h in hists.items():
-        ax.plot(h.index, h.values, lw=1, label=name)
-    ax.set(xlim=(50, 450), xlabel="Fragment length (bp)", ylabel="Proportion",
-           title="Fragment size distribution")
-    ax.axvline(167, color="grey", ls=":", lw=0.8)
+    palette = ["#1b6ca8", "#d1495b", "#2e933c", "#edae49", "#7b4b94", "#5c5c5c"]
+    gcol = {g: palette[i % len(palette)] for i, g in enumerate(groups.loc[order].unique())}
+    styles = ["-", "--", ":", "-."]
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    rep = groups.loc[order].groupby(groups.loc[order]).cumcount()  # replicate index within group
+    for name in order:
+        g = groups[name]
+        ls = styles[rep[name] % len(styles)]
+        h = hists[name]
+        for ax in axes:
+            ax.plot(h.index, h.values, lw=1.1, ls=ls, color=gcol[g], label=f"{name} ({g})")
+    axes[0].set(xlim=(50, 450), xlabel="Fragment length (bp)", ylabel="Proportion",
+                title="Fragment size distribution")
+    axes[1].set(xlim=(50, 600), yscale="log", xlabel="Fragment length (bp)",
+                title="Log scale (long / multi-nucleosomal fragments)")
+    for ax in axes:
+        ax.axvline(167, color="grey", ls=":", lw=0.8)
     if len(hists) <= 12:
-        ax.legend(fontsize=7, frameon=False)
+        axes[0].legend(fontsize=7, frameon=False)
     fig.tight_layout()
     fig.savefig(f"{args.out}/size_distribution.png", dpi=150)
+
+    # PCA of the genome-wide ratio profile and of end-motif frequencies
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.2))
+    for ax, (title, m) in zip(axes, [("Short/long ratio profile", ratio_m),
+                                     ("End-motif frequencies", motif_m)]):
+        x = m.values - m.values.mean(axis=0)
+        x = x / np.where(x.std(axis=0) > 0, x.std(axis=0), 1)
+        if len(m) < 3:
+            ax.set_axis_off()
+            continue
+        u, sv, _ = np.linalg.svd(x, full_matrices=False)
+        pcs, var = u * sv, sv ** 2 / (sv ** 2).sum()
+        for i, name in enumerate(m.index):
+            ax.scatter(pcs[i, 0], pcs[i, 1], color=gcol[groups[name]], s=40)
+            ax.annotate(name, (pcs[i, 0], pcs[i, 1]), fontsize=7, xytext=(3, 3),
+                        textcoords="offset points")
+        ax.set(title=title, xlabel=f"PC1 ({var[0]:.0%})", ylabel=f"PC2 ({var[1]:.0%})")
+    handles = [plt.Line2D([], [], marker="o", ls="", color=c, label=g) for g, c in gcol.items()]
+    fig.legend(handles=handles, loc="lower center", ncol=len(gcol), frameon=False, fontsize=8)
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    fig.savefig(f"{args.out}/pca.png", dpi=150)
 
     chroms = [c.split(":")[0] for c in ratio_m.columns]
     fig, ax = plt.subplots(figsize=(12, max(2, 0.3 * len(ratio_m) + 1)))
@@ -315,7 +369,8 @@ def main(argv=None):
     e.add_argument("--blacklist", help="BED of regions to exclude (e.g. ENCODE hg38 blacklist v2)")
     e.add_argument("--min-mapq", type=int, default=30)
     e.add_argument("--min-len", type=int, default=20)
-    e.add_argument("--chroms", default=AUTOSOMES, help="regex of contigs to keep (default autosomes)")
+    e.add_argument("--chroms", default=AUTOSOMES_XY,
+                   help="regex of contigs to keep (default autosomes + X + Y)")
     e.set_defaults(func=extract)
 
     f = sub.add_parser("features", help="fragment table -> per-sample features")
@@ -326,12 +381,14 @@ def main(argv=None):
     f.add_argument("--bin-size", type=int, default=5_000_000)
     f.add_argument("--min-len", type=int, default=50)
     f.add_argument("--max-len", type=int, default=600)
-    f.add_argument("--chroms", default=AUTOSOMES)
+    f.add_argument("--chroms", default=AUTOSOMES,
+                   help="regex of contigs used for size/motif/bin features (default autosomes)")
     f.set_defaults(func=features)
 
     c = sub.add_parser("cohort", help="merge per-sample features")
     c.add_argument("-i", "--inputs", nargs="+", required=True, help="feature directories")
     c.add_argument("-o", "--out", required=True)
+    c.add_argument("-s", "--samples", help="TSV with columns 'sample' and 'group' (colours plots)")
     c.set_defaults(func=cohort)
 
     args = p.parse_args(argv)

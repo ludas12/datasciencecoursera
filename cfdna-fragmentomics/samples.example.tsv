@@ -1,0 +1,7 @@
+sample	group	r1	r2
+HC1	healthy_plasma	fastq/HC1_R1.fastq.gz	fastq/HC1_R2.fastq.gz
+HC2	healthy_plasma	fastq/HC2_R1.fastq.gz	fastq/HC2_R2.fastq.gz
+LTX1_P	ltx_plasma	fastq/LTX1_P_R1.fastq.gz	fastq/LTX1_P_R2.fastq.gz
+LTX2_P	ltx_plasma	fastq/LTX2_P_R1.fastq.gz	fastq/LTX2_P_R2.fastq.gz
+LTX1_B	ltx_bal	fastq/LTX1_B_R1.fastq.gz	fastq/LTX1_B_R2.fastq.gz
+LTX2_B	ltx_bal	fastq/LTX2_B_R1.fastq.gz	fastq/LTX2_B_R2.fastq.gz

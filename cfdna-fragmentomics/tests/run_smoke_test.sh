@@ -10,7 +10,8 @@ for s in healthy1 healthy2 cancer1; do
   python fragmentomics/cfdna_frag.py extract -b "$T/$s.bam" -r "$T/ref.fa" -o "$T/$s.frags.tsv.gz" --blacklist "$T/blacklist.bed"
   python fragmentomics/cfdna_frag.py features -f "$T/$s.frags.tsv.gz" -r "$T/ref.fa" -o "$T/features/$s" --bin-size 500000
 done
-python fragmentomics/cfdna_frag.py cohort -i "$T"/features/* -o "$T/cohort"
+printf "sample\tgroup\nhealthy1\thealthy\nhealthy2\thealthy\ncancer1\tcase\n" > "$T/samples.tsv"
+python fragmentomics/cfdna_frag.py cohort -i "$T"/features/* -s "$T/samples.tsv" -o "$T/cohort"
 python - "$T" <<'PY'
 import sys, pandas as pd
 s = pd.read_csv(f"{sys.argv[1]}/cohort/size_motif_summary.tsv", sep="\t", index_col=0)
