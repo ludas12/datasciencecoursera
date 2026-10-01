@@ -22,7 +22,7 @@ mkdir -p "$OUT"
 #    so don't use an aggressive length filter here.
 fastp -i "$R1" -I "$R2" \
       -o "$OUT/$SAMPLE.trim.R1.fq.gz" -O "$OUT/$SAMPLE.trim.R2.fq.gz" \
-      --detect_adapter_for_pe --length_required 30 --thread "$THREADS" \
+      --detect_adapter_for_pe --trim_poly_g --length_required 30 --thread "$THREADS" \
       --json "$OUT/$SAMPLE.fastp.json" --html "$OUT/$SAMPLE.fastp.html"
 
 # 2. Align, fixmate (adds MC/ms tags needed by markdup), sort.
