@@ -32,8 +32,14 @@ def main(d):
     cols = ["file", "total_reads", "read_length", "pct_gc", "pct_dup_remaining",
             "first10_A", "first10_C", "first10_G", "first10_T", "max_cycle_bias_1to10",
             "adapter_max_pct", "top_overrepresented"]
+    if not os.path.isdir(d):
+        sys.exit(f"Not a directory: {d}")
+    zips = sorted(glob.glob(os.path.join(d, "**", "*_fastqc.zip"), recursive=True))
+    if not zips:
+        sys.exit(f"No *_fastqc.zip files found in {os.path.abspath(d)} (searched subfolders too)")
+    print(f"Found {len(zips)} FastQC zips", file=sys.stderr)
     print("\t".join(cols))
-    for z in sorted(glob.glob(os.path.join(d, "*_fastqc.zip"))):
+    for z in zips:
         with zipfile.ZipFile(z) as zf:
             data = zf.read(next(n for n in zf.namelist() if n.endswith("fastqc_data.txt"))).decode()
         m = modules(data)
