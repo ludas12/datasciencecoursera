@@ -14,5 +14,5 @@ OUT=$WORK/results
 export UMI_LEN=8      # 8 bp in-line block at the start of R1 and R2 (see FastQC per-base content)
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate cfdna-frag
+conda activate "${CONDA_ENV:-cfdna-frag}"   # env name or path; override: sbatch --export=ALL,CONDA_ENV=fragtools ...
 scripts/run_all.sh samples.tsv "$REF" "$BLACKLIST" "$OUT" "${SLURM_CPUS_PER_TASK:-16}"

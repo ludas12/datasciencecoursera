@@ -9,7 +9,7 @@ set -euo pipefail
 REFDIR=/group/sbms001/hludewick/Fragmentomics/ref
 mkdir -p "$REFDIR" && cd "$REFDIR"
 source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate cfdna-frag
+conda activate "${CONDA_ENV:-cfdna-frag}"   # env name or path; override: sbatch --export=ALL,CONDA_ENV=fragtools ...
 
 [[ -s hg38.fa ]] || { wget -q https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/analysisSet/hg38.analysisSet.fa.gz
                       gunzip -c hg38.analysisSet.fa.gz > hg38.fa && rm hg38.analysisSet.fa.gz; }
