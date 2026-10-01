@@ -13,7 +13,8 @@
 # UMI_LEN (env, default 0): number of in-line bases at the start of BOTH reads that are not
 # part of the cfDNA fragment (e.g. in-line UMIs). They are removed by fastp and kept in the read
 # name. Read start = fragment end, so leaving them in shifts every fragment end and length.
-# For the 2026-09-08 IDT xGen cfDNA & FFPE run, FastQC shows an 8 bp block: UMI_LEN=8.
+# IDT xGen cfDNA & FFPE DNA Library Prep v2 MC: fixed, in-line 8 bp UMIs (32 sequences) at the
+# start of R1 and R2 (IDT manual; matches FastQC per-base content) -> UMI_LEN=8.
 set -euo pipefail
 
 if [[ $# -lt 5 ]]; then
