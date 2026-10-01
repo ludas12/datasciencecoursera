@@ -11,5 +11,5 @@ dependencies:
   - bwa-mem2
   - fastp
   # optional, for tumour fraction / CNA (scripts/02_ichorcna.sh)
-  - hmmcopy
-  - r-ichorcna
+  # - hmmcopy
+  # - r-ichorcna
