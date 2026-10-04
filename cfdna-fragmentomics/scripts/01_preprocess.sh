@@ -8,6 +8,8 @@
 #
 # REF.fa must be indexed for bwa-mem2 (bwa-mem2 index REF.fa) and samtools (samtools faidx REF.fa).
 # ALIGNER=bwa (env) uses a classic bwa index instead; results are equivalent.
+# ALIGNER=bowtie2 with BT2_INDEX=<index prefix> uses an existing bowtie2 index built from REF.fa
+# (end-to-end mode; max fragment length raised to 1000 bp so long BAL fragments still pair).
 # Use the SAME reference build (e.g. hg38 analysis set) for every sample and for the
 # fragment extraction step.
 #
@@ -24,7 +26,7 @@ fi
 
 SAMPLE=$1; R1=$2; R2=$3; REF=$4; OUT=$5; THREADS=${6:-8}
 UMI_LEN=${UMI_LEN:-0}
-ALIGNER=${ALIGNER:-bwa-mem2}   # or "bwa" to use an existing classic bwa index (.bwt/.pac/.sa)
+ALIGNER=${ALIGNER:-bwa-mem2}   # bwa-mem2 | bwa | bowtie2
 mkdir -p "$OUT"
 UMI_OPTS=()
 if (( UMI_LEN > 0 )); then
@@ -40,8 +42,19 @@ fastp -i "$R1" -I "$R2" \
       --json "$OUT/$SAMPLE.fastp.json" --html "$OUT/$SAMPLE.fastp.html"
 
 # 2. Align, fixmate (adds MC/ms tags needed by markdup), sort.
-"$ALIGNER" mem -t "$THREADS" -R "@RG\tID:$SAMPLE\tSM:$SAMPLE\tPL:ILLUMINA" "$REF" \
-         "$OUT/$SAMPLE.trim.R1.fq.gz" "$OUT/$SAMPLE.trim.R2.fq.gz" \
+align() {
+    if [[ "$ALIGNER" == bowtie2 ]]; then
+        : "${BT2_INDEX:?set BT2_INDEX to the bowtie2 index prefix when ALIGNER=bowtie2}"
+        bowtie2 -p "$THREADS" -x "$BT2_INDEX" -X 1000 --no-mixed --no-discordant \
+                --rg-id "$SAMPLE" --rg "SM:$SAMPLE" --rg "PL:ILLUMINA" \
+                -1 "$OUT/$SAMPLE.trim.R1.fq.gz" -2 "$OUT/$SAMPLE.trim.R2.fq.gz" \
+                2> "$OUT/$SAMPLE.bowtie2.log"
+    else
+        "$ALIGNER" mem -t "$THREADS" -R "@RG\tID:$SAMPLE\tSM:$SAMPLE\tPL:ILLUMINA" "$REF" \
+                   "$OUT/$SAMPLE.trim.R1.fq.gz" "$OUT/$SAMPLE.trim.R2.fq.gz"
+    fi
+}
+align \
   | samtools fixmate -m -@ "$THREADS" - - \
   | samtools sort -@ "$THREADS" -o "$OUT/$SAMPLE.sorted.bam" -
 
