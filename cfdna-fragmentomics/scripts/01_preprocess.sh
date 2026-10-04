@@ -7,6 +7,7 @@
 #   scripts/01_preprocess.sh SAMPLE R1.fastq.gz R2.fastq.gz REF.fa OUTDIR [THREADS]
 #
 # REF.fa must be indexed for bwa-mem2 (bwa-mem2 index REF.fa) and samtools (samtools faidx REF.fa).
+# ALIGNER=bwa (env) uses a classic bwa index instead; results are equivalent.
 # Use the SAME reference build (e.g. hg38 analysis set) for every sample and for the
 # fragment extraction step.
 #
@@ -23,6 +24,7 @@ fi
 
 SAMPLE=$1; R1=$2; R2=$3; REF=$4; OUT=$5; THREADS=${6:-8}
 UMI_LEN=${UMI_LEN:-0}
+ALIGNER=${ALIGNER:-bwa-mem2}   # or "bwa" to use an existing classic bwa index (.bwt/.pac/.sa)
 mkdir -p "$OUT"
 UMI_OPTS=()
 if (( UMI_LEN > 0 )); then
@@ -38,7 +40,7 @@ fastp -i "$R1" -I "$R2" \
       --json "$OUT/$SAMPLE.fastp.json" --html "$OUT/$SAMPLE.fastp.html"
 
 # 2. Align, fixmate (adds MC/ms tags needed by markdup), sort.
-bwa-mem2 mem -t "$THREADS" -R "@RG\tID:$SAMPLE\tSM:$SAMPLE\tPL:ILLUMINA" "$REF" \
+"$ALIGNER" mem -t "$THREADS" -R "@RG\tID:$SAMPLE\tSM:$SAMPLE\tPL:ILLUMINA" "$REF" \
          "$OUT/$SAMPLE.trim.R1.fq.gz" "$OUT/$SAMPLE.trim.R2.fq.gz" \
   | samtools fixmate -m -@ "$THREADS" - - \
   | samtools sort -@ "$THREADS" -o "$OUT/$SAMPLE.sorted.bam" -

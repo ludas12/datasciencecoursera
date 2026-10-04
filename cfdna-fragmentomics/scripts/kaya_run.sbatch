@@ -8,8 +8,9 @@
 set -euo pipefail
 
 WORK=/group/sbms001/hludewick/Fragmentomics
-REF=$WORK/ref/hg38.fa                      # needs bwa-mem2 index + .fai
-BLACKLIST=$WORK/ref/hg38-blacklist.v2.bed
+REF=${REF:-$WORK/ref/hg38.fa}             # needs bwa-mem2 (or bwa, with ALIGNER=bwa) index + .fai
+BLACKLIST=${BLACKLIST:-$WORK/ref/hg38-blacklist.v2.bed}
+export ALIGNER=${ALIGNER:-bwa-mem2}
 OUT=$WORK/results
 export UMI_LEN=8      # 8 bp in-line block at the start of R1 and R2 (see FastQC per-base content)
 
