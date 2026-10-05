@@ -119,6 +119,13 @@ first downstream nucleosome) are also reported. Core-trimmed fragments (BAL) mar
 nucleosome sharply, which can cancel the dip in the central window. TSSs of the same gene within
 500 bp are merged so genes with many transcripts are counted once per promoter.
 
+Larger gene sets: `scripts/build_genesets_hpa.py` builds sets of hundreds of genes from the Human
+Protein Atlas (lung epithelium by single-cell type, lung tissue, neutrophil, monocyte/macrophage,
+lymphocyte, liver, 2,000 housekeeping and 1,000 inactive genes) into
+`fragmentomics/genesets_hpa.tsv`. Noise falls roughly with the square root of set size. Run it once
+where the internet is reachable, then pass `-g fragmentomics/genesets_hpa.tsv` to `tss` (or
+`GENESETS=...` to the Kaya scripts).
+
 Interpretation: compare each set with `inactive_control` (TSSs are GC-rich, so some dip can be
 technical) and with `housekeeping`. At low coverage only set-level differences between samples are
 meaningful; a lung-epithelium dip is expected in BAL but is usually too small to see in plasma.

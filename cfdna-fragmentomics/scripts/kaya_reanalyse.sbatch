@@ -18,13 +18,14 @@ BIN=${BIN:-5000000}
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "${CONDA_ENV:-cfdna-frag}"
 FRAG="python fragmentomics/cfdna_frag.py"
+# GENESETS=path/to/genesets.tsv to use other gene sets (e.g. fragmentomics/genesets_hpa.tsv)
 
 tail -n +2 samples.tsv | while IFS=$'\t' read -r S _; do
     [[ -z "$S" ]] && continue
     echo "== $S"
     $FRAG features -f "$OUT/frags/$S.frags.tsv.gz" -r "$REF" -o "$OUT/features/$S" -n "$S" --bin-size "$BIN"
     if [[ -s "$TSS_BED" ]]; then
-        $FRAG tss -f "$OUT/frags/$S.frags.tsv.gz" -t "$TSS_BED" -o "$OUT/features/$S" -r "$REF"
+        $FRAG tss -f "$OUT/frags/$S.frags.tsv.gz" -t "$TSS_BED" -o "$OUT/features/$S" -r "$REF" ${GENESETS:+-g "$GENESETS"}
     fi
 done
 $FRAG cohort -i "$OUT"/features/* -s samples.tsv -o "$OUT/cohort"
