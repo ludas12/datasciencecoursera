@@ -126,6 +126,11 @@ lymphocyte, liver, 2,000 housekeeping and 1,000 inactive genes) into
 where the internet is reachable, then pass `-g fragmentomics/genesets_hpa.tsv` to `tss` (or
 `GENESETS=...` to the Kaya scripts).
 
+Relative values: silent developmental genes often have CpG-island promoters that stay partly
+nucleosome-free, so `inactive_control` dips slightly too (≈0.85–0.95 in plasma). Each set is
+therefore also reported relative to the sample's own inactive control
+(`tss_ndr_relative.tsv`; <1 = more open than background), and `key_metrics.png` uses these.
+
 Interpretation: compare each set with `inactive_control` (TSSs are GC-rich, so some dip can be
 technical) and with `housekeeping`. At low coverage only set-level differences between samples are
 meaningful; a lung-epithelium dip is expected in BAL but is usually too small to see in plasma.

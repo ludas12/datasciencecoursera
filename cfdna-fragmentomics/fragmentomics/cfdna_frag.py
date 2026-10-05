@@ -598,17 +598,29 @@ def cohort(args):
         central = pd.DataFrame({n: t["central_coverage"] for n, t in tss_sum.items()}).T.loc[
             [n for n in order if n in tss_sum]]
         central.insert(0, "group", groups.loc[central.index])
-        central.to_csv(f"{args.out}/tss_central_coverage.tsv", sep="\t", float_format="%.4g")
+        central.to_csv(f"{args.out}/tss_central_coverage.tsv", sep="\t", float_format="%.4g",
+                       index_label="sample")
         # primary TSS measure = the upstream nucleosome-depleted window when available
         primary, primary_label = central, "Central TSS dip"
         for col in ("ndr_coverage", "plus1_coverage"):
             if all(col in t.columns for t in tss_sum.values()):
                 m = pd.DataFrame({n: t[col] for n, t in tss_sum.items()}).T.loc[central.index]
                 m.insert(0, "group", groups.loc[m.index])
-                m.to_csv(f"{args.out}/tss_{col}.tsv", sep="\t", float_format="%.4g")
+                m.to_csv(f"{args.out}/tss_{col}.tsv", sep="\t", float_format="%.4g",
+                         index_label="sample")
                 if col == "ndr_coverage":
                     primary = m
                     primary_label = "Upstream TSS dip"
+        # relative to each sample's own inactive-control set: silent CpG-island promoters are
+        # partly nucleosome-free too, so the inactive set is the per-sample background
+        relative = None
+        if "inactive_control" in primary.columns:
+            vals = primary.drop(columns="group")
+            relative = vals.div(vals["inactive_control"], axis=0).drop(columns="inactive_control")
+            relative.insert(0, "group", primary["group"])
+            name = "ndr" if primary is not central else "central"
+            relative.to_csv(f"{args.out}/tss_{name}_relative.tsv", sep="\t", float_format="%.4g",
+                            index_label="sample")
         sets = list(next(iter(tss_prof.values())).columns)
         ncol = min(4, len(sets))
         nrow = int(np.ceil(len(sets) / ncol))
@@ -646,9 +658,12 @@ def cohort(args):
                "frac_400_600": "Fraction 400-600 bp (random cuts)"}
     panels = [(summary[k], v) for k, v in metrics.items() if k in summary]
     if tss_sum:
-        for st in ("housekeeping", "inactive_control", "lung_epithelium", "neutrophil"):
-            if st in primary.columns:
-                panels.append((primary[st], f"{primary_label}: {st}"))
+        if "inactive_control" in primary.columns:
+            panels.append((primary["inactive_control"], f"{primary_label}: inactive control"))
+        src, lab = (relative, "TSS dip vs inactive") if relative is not None else (primary, primary_label)
+        for st in ("housekeeping", "lung_epithelium", "neutrophil", "monocyte_macrophage"):
+            if st in src.columns:
+                panels.append((src[st], f"{lab}: {st}"))
     glist = list(gcol)
     ncol = 4
     nrow = int(np.ceil(len(panels) / ncol))
