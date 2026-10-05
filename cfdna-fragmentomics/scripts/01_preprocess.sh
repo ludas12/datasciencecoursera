@@ -69,10 +69,13 @@ samtools flagstat -@ "$THREADS" "$OUT/$SAMPLE.bam" > "$OUT/$SAMPLE.flagstat"
 samtools stats -@ "$THREADS" "$OUT/$SAMPLE.bam" | grep '^SN' | cut -f2- > "$OUT/$SAMPLE.stats"
 # 5' soft-clipping check: if non-genomic bases remain at read starts, bwa soft-clips them and
 # this rate is high. Expect a few % at most; >10% means UMI_LEN is probably wrong.
-samtools view -F 0xF04 -q 30 "$OUT/$SAMPLE.bam" | head -n 2000000 | awk '
+# pipefail is off in this subshell: head closing the pipe early makes samtools exit with
+# SIGPIPE (141), which is expected and must not abort the script.
+( set +o pipefail
+  samtools view -F 0xF04 -q 30 "$OUT/$SAMPLE.bam" | head -n 2000000 | awk '
     { fwd = int($2 / 16) % 2 == 0; n++
       if ((fwd && $6 ~ /^[0-9]+S/) || (!fwd && $6 ~ /S$/)) clip++ }
     END { printf "reads\t%d\npct_5prime_softclipped\t%.2f\n", n, 100 * clip / n }' \
-    > "$OUT/$SAMPLE.softclip.txt"
+    > "$OUT/$SAMPLE.softclip.txt" )
 cat "$OUT/$SAMPLE.softclip.txt"
 echo "Done: $OUT/$SAMPLE.bam"
