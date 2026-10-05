@@ -18,17 +18,17 @@ def main():
             r = {"Gene": f"{prefix}{i}", "Ensembl": "ENSG0", "RNA tissue specificity": "Low tissue specificity",
                  "RNA tissue distribution": "Detected in many", "RNA tissue specific nTPM": "",
                  "RNA single cell type specificity": "Low cell type specificity",
-                 "RNA single cell type specific nTPM": "",
+                 "RNA single cell type specific nCPM": "",
                  "RNA blood cell specificity": "Low immune cell specificity", "RNA blood cell specific nTPM": ""}
             r.update(kw)
             rows.append(r)
     add("AT2_", 30, **{"RNA single cell type specificity": "Cell type enriched",
-                       "RNA single cell type specific nTPM": "alveolar cells type 2: 900.1"})
+                       "RNA single cell type specific nCPM": "alveolar cells type 2: 900.1"})
     add("CLUB_", 25, **{"RNA single cell type specificity": "Group enriched",
-                        "RNA single cell type specific nTPM": "club cells: 300;ciliated cells: 200"})
+                        "RNA single cell type specific nCPM": "club cells: 300;ciliated cells: 200"})
     # lung single-cell gene that is ALSO neutrophil-specific -> excluded from lung_epithelium
     add("LUNGNEU_", 5, **{"RNA single cell type specificity": "Cell type enriched",
-                          "RNA single cell type specific nTPM": "alveolar cells type 1: 50",
+                          "RNA single cell type specific nCPM": "alveolar cells type 1: 50",
                           "RNA blood cell specificity": "Immune cell enriched",
                           "RNA blood cell specific nTPM": "neutrophil: 400"})
     add("LUNGT_", 25, **{"RNA tissue specificity": "Tissue enriched", "RNA tissue specific nTPM": "lung: 500"})

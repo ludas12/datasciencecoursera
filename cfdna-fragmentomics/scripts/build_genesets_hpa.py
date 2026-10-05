@@ -57,6 +57,9 @@ def load_hpa(path):
                 req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
                 with urllib.request.urlopen(req, timeout=300) as r:
                     raw = r.read()
+                with open("proteinatlas.tsv.zip", "wb") as fh:   # reuse later with --hpa
+                    fh.write(raw)
+                print("  saved a copy as proteinatlas.tsv.zip", file=sys.stderr)
                 break
             except Exception as e:  # noqa: BLE001 - report and try the next mirror
                 errors.append(f"{url}: {e}")
@@ -124,11 +127,18 @@ def main():
     df = df.rename(columns={gene: "Gene"})
     t_cat = find_col(df, r"RNA tissue specificity", "tissue specificity")
     t_dist = find_col(df, r"RNA tissue distribution", "tissue distribution")
-    t_spec = find_col(df, r"RNA tissue specific n?TPM", "tissue specific nTPM")
+    t_spec = find_col(df, r"RNA tissue specific [np]?[CT]PM", "tissue specific nTPM")
     c_cat = find_col(df, r"RNA single cell type specificity", "single-cell type specificity")
-    c_spec = find_col(df, r"RNA single cell type specific n?TPM", "single-cell type specific nTPM")
+    c_spec = find_col(df, r"RNA single cell type specific [np]?[CT]PM", "single-cell type specific nTPM")
     b_cat = find_col(df, r"RNA blood cell specificity", "blood cell specificity")
-    b_spec = find_col(df, r"RNA blood cell specific n?TPM", "blood cell specific nTPM")
+    b_spec = find_col(df, r"RNA blood cell specific [np]?[CT]PM", "blood cell specific nTPM")
+
+    names = sorted({k for d in df[c_spec].map(parse_specific) for k in d})
+    lungish = [n for n in names if re.search(r"alveol|club|cilia|respir|basal|ionocyte|secretory|macrophage", n, re.I)]
+    print(f"\nSingle-cell types in this release: {len(names)}; lung/macrophage-related: {lungish}",
+          file=sys.stderr)
+    blood = sorted({k for d in df[b_spec].map(parse_specific) for k in d})
+    print(f"Blood cell types: {blood}", file=sys.stderr)
 
     blood_specific = set(df.loc[df[b_cat].fillna("").str.contains(ENR_OR_ENH), "Gene"])
     rng = np.random.default_rng(args.seed)
