@@ -110,6 +110,21 @@ Interpretation: compare each set with `inactive_control` (TSSs are GC-rich, so s
 technical) and with `housekeeping`. At low coverage only set-level differences between samples are
 meaningful; a lung-epithelium dip is expected in BAL but is usually too small to see in plasma.
 
+## BAL-oriented size metrics
+BAL cfDNA lacks the 167 bp peak and mixes nuclease-trimmed nucleosomal DNA with randomly cut DNA.
+Three metrics in `summary.json` / `size_motif_summary.tsv` capture this:
+
+| Metric | What it measures | Plasma | BAL |
+|---|---|---|---|
+| `peak167_prominence` | mean count at 163–171 bp / shoulders (140–149, 185–194 bp) | high (>2) | ~1 or below |
+| `ladder_amp_80_150` | amplitude of a 10–11 bp sinusoid fitted to the detrended 80–150 bp histogram (0.10 = peaks 10% above trend) | low | high |
+| `frac_400_600` | fraction of fragments 400–600 bp (structureless long tail) | low | high |
+
+The ladder amplitude has a noise floor that falls with fragment count (~0.1–0.2 at 60k
+fragments, roughly 10× lower at several million), so compare samples of similar depth.
+Extra columns in `samples.tsv` (e.g. `patient`, `diagnosis`) are carried into the cohort tables.
+To recompute features for a finished run after a code update: `sbatch scripts/kaya_reanalyse.sbatch`.
+
 ## Low-coverage notes
 - **Depth needed:** size distribution and end motifs are stable from ~1M fragments. DELFI ratios at
   5 Mb bins work from ~0.1x (~1–2M fragments → a few thousand per bin). Use `--bin-size 10000000` below that.

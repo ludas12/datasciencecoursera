@@ -20,7 +20,7 @@ for s in healthy1 healthy2 cancer1; do
   python fragmentomics/cfdna_frag.py features -f "$T/$s.frags.tsv.gz" -r "$T/ref.fa" -o "$T/features/$s" --bin-size 500000
   python fragmentomics/cfdna_frag.py tss -f "$T/$s.frags.tsv.gz" -t "$T/tss.bed" -o "$T/features/$s"
 done
-printf "sample\tgroup\tpatient\nhealthy1\thealthy\tP1\nhealthy2\thealthy\tP2\ncancer1\tcase\tP1\n" > "$T/samples.tsv"
+printf "sample\tgroup\tpatient\tdiagnosis\nhealthy1\thealthy\tP1\tnone\nhealthy2\thealthy\tP2\tnone\ncancer1\tcase\tP1\tdisease\n" > "$T/samples.tsv"
 python fragmentomics/cfdna_frag.py cohort -i "$T"/features/* -s "$T/samples.tsv" -o "$T/cohort"
 python - "$T" <<'PY'
 import sys, pandas as pd

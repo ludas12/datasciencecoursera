@@ -133,6 +133,28 @@ def extract(args):
 
 
 # --------------------------------------------------------------------------- features
+def ladder_amplitude(hist, lo=80, hi=150):
+    """Relative amplitude of the ~10 bp ladder in [lo, hi] bp.
+
+    The histogram is divided by its 11 bp moving average, and a sinusoid with period 10-11 bp
+    is fitted by least squares; the best amplitude is returned (0.10 = peaks ~10% above trend).
+    Fitting one frequency averages out counting noise, unlike a peak-to-trough measure."""
+    seg = hist[lo - 5:hi + 6].astype(float)
+    if seg.sum() < 1000:
+        return np.nan
+    trend = np.convolve(seg, np.ones(11) / 11, mode="same")[5:-5]
+    rel = seg[5:-5] / np.where(trend > 0, trend, np.nan) - 1
+    x = np.arange(lo, hi + 1)
+    ok = np.isfinite(rel)
+    best = 0.0
+    for period in np.arange(10.0, 11.01, 0.05):
+        w = 2 * np.pi * x[ok] / period
+        design = np.column_stack([np.sin(w), np.cos(w), np.ones(ok.sum())])
+        coef, *_ = np.linalg.lstsq(design, rel[ok], rcond=None)
+        best = max(best, float(np.hypot(coef[0], coef[1])))
+    return best
+
+
 def size_features(lengths):
     hist = np.bincount(lengths, minlength=MAX_LEN + 1)[: MAX_LEN + 1]
     n = hist.sum()
@@ -160,6 +182,14 @@ def size_features(lengths):
         "short_long_ratio": short / long_ if long_ else np.nan,
         "frac_dinucleosome_250_450": in_rng(250, 450) / n,
         "period10_power": period10,
+        # BAL-oriented shape metrics
+        # mono-nucleosome peak: mean count at 163-171 bp over the shoulders either side
+        "peak167_prominence": float(hist[163:172].mean() / np.concatenate(
+            [hist[140:150], hist[185:195]]).mean()) if n else np.nan,
+        # 10 bp ladder strength in the sub-nucleosomal range (nuclease trimming of nucleosomes)
+        "ladder_amp_80_150": ladder_amplitude(hist),
+        # long, structureless tail: randomly cut DNA (no di/tri-nucleosome peaks)
+        "frac_400_600": in_rng(400, 600) / n,
     }
     return hist, summary
 
@@ -379,6 +409,10 @@ def cohort(args):
     order = groups.sort_values(kind="stable").index
     summary = summary.loc[order]
     summary.insert(0, "group", groups.loc[order])
+    if args.samples:
+        extra = [c for c in sheet.columns if c not in ("group", "r1", "r2")]
+        for i, c in enumerate(extra, start=1):
+            summary.insert(i, c, sheet.loc[order, c])
     # keep bins that pass in every sample so the matrix is complete for modelling
     ratio_m = pd.DataFrame(ratios).dropna().T.loc[order]
     cov_m = pd.DataFrame(covs).loc[ratio_m.columns].T.loc[order]
@@ -388,7 +422,7 @@ def cohort(args):
     ratio_m.to_csv(f"{args.out}/delfi_short_long_ratio.tsv", sep="\t", float_format="%.5g")
     cov_m.to_csv(f"{args.out}/coverage_norm.tsv", sep="\t", float_format="%.5g")
     motif_m.to_csv(f"{args.out}/end_motif_freq.tsv", sep="\t", float_format="%.6g")
-    num = summary.drop(columns="group").select_dtypes("number")
+    num = summary.select_dtypes("number")
     num.groupby(summary.group).agg(["mean", "min", "max"]).T.to_csv(
         f"{args.out}/group_summary.tsv", sep="\t", float_format="%.5g")
     log(f"{len(summary)} samples, {ratio_m.shape[1]} bins shared")
@@ -488,8 +522,11 @@ def cohort(args):
     metrics = {"median_len": "Median length (bp)", "frac_lt150": "Fraction < 150 bp",
                "short_long_ratio": "Short/long ratio",
                "frac_dinucleosome_250_450": "Di-nucleosomal fraction",
-               "motif_CCCA": "CCCA end-motif freq.", "motif_diversity_score": "Motif diversity"}
-    panels = [(summary[k], v) for k, v in metrics.items()]
+               "motif_CCCA": "CCCA end-motif freq.", "motif_diversity_score": "Motif diversity",
+               "peak167_prominence": "167 bp peak prominence",
+               "ladder_amp_80_150": "10 bp ladder amplitude (80-150 bp)",
+               "frac_400_600": "Fraction 400-600 bp (random cuts)"}
+    panels = [(summary[k], v) for k, v in metrics.items() if k in summary]
     if tss_sum:
         for st in ("lung_epithelium", "neutrophil", "housekeeping"):
             if st in central.columns:
