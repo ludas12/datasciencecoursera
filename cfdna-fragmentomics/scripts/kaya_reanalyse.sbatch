@@ -24,7 +24,7 @@ tail -n +2 samples.tsv | while IFS=$'\t' read -r S _; do
     echo "== $S"
     $FRAG features -f "$OUT/frags/$S.frags.tsv.gz" -r "$REF" -o "$OUT/features/$S" -n "$S" --bin-size "$BIN"
     if [[ -s "$TSS_BED" ]]; then
-        $FRAG tss -f "$OUT/frags/$S.frags.tsv.gz" -t "$TSS_BED" -o "$OUT/features/$S"
+        $FRAG tss -f "$OUT/frags/$S.frags.tsv.gz" -t "$TSS_BED" -o "$OUT/features/$S" -r "$REF"
     fi
 done
 $FRAG cohort -i "$OUT"/features/* -s samples.tsv -o "$OUT/cohort"

@@ -36,6 +36,14 @@ def main():
         lo, hi = (p, p + 300) if st == "+" else (p - 300, p)
         hit = (start < hi) & (end > lo)
         keep[hit & (rng.random(n) < 0.7)] = False
+    # artefact: one inactive-control locus with a pile of fragments 900 bp downstream
+    spike_tss, spike_strand = pos[len(active)], strand[len(active)]
+    sp = spike_tss + (900 if spike_strand == "+" else -900)
+    n_sp = 3000
+    start = np.concatenate([start[keep], np.full(n_sp, sp - 80)])
+    length = np.concatenate([length[keep], np.full(n_sp, 160)])
+    end = start + length
+    keep = np.ones(len(start), bool)
     f = pd.DataFrame({"chrom": "chr1", "start": start[keep], "end": end[keep], "length": length[keep],
                       "mapq": 60, "gc": 0.4, "motif_5p": "ACGT", "motif_3p": "ACGT"})
     f.sort_values("start").to_csv(f"{d}/frags.tsv.gz", sep="\t", index=False)
@@ -52,6 +60,10 @@ def main():
     down, up = prof.loc[100:250].mean(), prof.loc[-250:-100].mean()
     print(f"downstream {down:.2f}  upstream {up:.2f}")
     assert down < 0.6 and up > 0.8, (down, up)   # dip is downstream for both strands
+    ctrl_prof = pd.read_csv(f"{d}/out/tss_profiles.tsv", sep="\t", index_col=0)["inactive_control"]
+    spike = ctrl_prof.rolling(101, center=True).mean().loc[700:1100].max()
+    print(f"inactive_control max near planted spike: {spike:.2f}")
+    assert spike < 1.4, spike                      # single-locus spike is capped
     print("OK")
 
 

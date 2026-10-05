@@ -19,7 +19,7 @@ tail -n +2 "$SHEET" | while IFS=$'\t' read -r S GROUP R1 R2 _; do
         $FRAG extract -b "$OUT/bam/$S.bam" -r "$REF" --blacklist "$BL" -o "$OUT/frags/$S.frags.tsv.gz"; }
     $FRAG features -f "$OUT/frags/$S.frags.tsv.gz" -r "$REF" -o "$OUT/features/$S" -n "$S" --bin-size "$BIN"
     if [[ -n "${TSS_BED:-}" ]]; then
-        $FRAG tss -f "$OUT/frags/$S.frags.tsv.gz" -t "$TSS_BED" -o "$OUT/features/$S"
+        $FRAG tss -f "$OUT/frags/$S.frags.tsv.gz" -t "$TSS_BED" -o "$OUT/features/$S" -r "$REF"
     fi
 done
 

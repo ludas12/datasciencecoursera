@@ -106,6 +106,13 @@ The TSS BED needs gene symbols in one column (detected automatically) and ideall
 On Kaya, `sbatch scripts/kaya_tss.sbatch` runs it for all samples of a finished run and refreshes
 `cohort/` (`tss_profiles.png`, `tss_central_coverage.tsv`, `key_metrics.png`).
 
+Robustness: TSS windows with mean coverage >5× or <0.1× the median window are dropped
+(repeats, CNVs, unmappable), and each TSS's per-position coverage is capped at the pooled 99.9th
+percentile so a single artefact locus cannot dominate a set (`n_tss_excluded` in
+`tss_summary.tsv`). With `-r REF` each fragment is weighted by expected/observed density of its GC
+content (expected from 500k random genomic fragments with the sample's length distribution);
+weights are saved to `tss_gc_weights.tsv`. The Kaya scripts pass `-r` by default.
+
 Interpretation: compare each set with `inactive_control` (TSSs are GC-rich, so some dip can be
 technical) and with `housekeeping`. At low coverage only set-level differences between samples are
 meaningful; a lung-epithelium dip is expected in BAL but is usually too small to see in plasma.

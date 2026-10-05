@@ -310,63 +310,134 @@ def load_tss(bed, genes):
     return out.drop_duplicates(["chrom", "pos", "strand", "gene"])[["chrom", "pos", "strand", "gene"]]
 
 
-def tss_coverage(frags, tss, flank=TSS_FLANK):
-    """Strand-oriented fragment coverage around each TSS -> array (n_tss, 2*flank+1)."""
+TSS_OUTLIER_HIGH = 5.0    # drop TSS windows with mean coverage > this x the median window
+TSS_OUTLIER_LOW = 0.1     # ... or < this x the median (unmappable / deleted)
+TSS_CAP_QUANTILE = 0.999  # per-position coverage of one TSS is capped at this pooled quantile
+GC_BINS = np.linspace(0, 1, 51)
+
+
+def tss_coverage(frags, tss, flank=TSS_FLANK, weights=None):
+    """Strand-oriented (optionally weighted) fragment coverage around each TSS
+    -> array (n_tss, 2*flank+1)."""
     width = 2 * flank + 1
     out = np.zeros((len(tss), width))
     max_len = int(frags.length.max()) if len(frags) else 0
+    w_all = np.ones(len(frags)) if weights is None else np.asarray(weights, float)
+    chrom_vals = frags.chrom.values
     for chrom, t in tss.groupby("chrom"):
-        f = frags[frags.chrom == chrom]
-        if f.empty:
+        sel = chrom_vals == chrom
+        if not sel.any():
             continue
-        order = np.argsort(f.start.values, kind="stable")
-        st, en = f.start.values[order], f.end.values[order]
+        st0, en0, w0_ = frags.start.values[sel], frags.end.values[sel], w_all[sel]
+        order = np.argsort(st0, kind="stable")
+        st, en, wt = st0[order], en0[order], w0_[order]
         for i, (pos, strand) in zip(t.index, zip(t.pos.values, t.strand.values)):
             w0, w1 = pos - flank, pos + flank + 1
             lo = np.searchsorted(st, w0 - max_len, side="left")
             hi = np.searchsorted(st, w1, side="left")
-            s_, e_ = st[lo:hi], en[lo:hi]
+            s_, e_, ww = st[lo:hi], en[lo:hi], wt[lo:hi]
             keep = e_ > w0
-            s_, e_ = np.clip(s_[keep], w0, w1) - w0, np.clip(e_[keep], w0, w1) - w0
+            s_, e_, ww = np.clip(s_[keep], w0, w1) - w0, np.clip(e_[keep], w0, w1) - w0, ww[keep]
             diff = np.zeros(width + 1)
-            np.add.at(diff, s_, 1)
-            np.add.at(diff, e_, -1)
+            np.add.at(diff, s_, ww)
+            np.add.at(diff, e_, -ww)
             cov = np.cumsum(diff)[:width]
             out[tss.index.get_loc(i)] = cov[::-1] if strand == "-" else cov
     return out
+
+
+def gc_weights(frags, reference, n_sample=500_000, seed=0):
+    """Per-fragment GC-bias weights: expected / observed density of fragment GC.
+
+    Expected = GC of random genomic fragments (same chromosomes and length distribution as the
+    sample, N-free). Weights are clipped to [0.25, 4], sparse GC bins take the nearest
+    well-sampled bin's weight, and weights are scaled
+    to mean 1 over the sample's fragments. Returns (weights, table for QC)."""
+    import pysam
+
+    rng = np.random.default_rng(seed)
+    fa = pysam.FastaFile(reference)
+    chroms = [c for c in frags.chrom.unique() if c in fa.references]
+    lens = np.array([fa.get_reference_length(c) for c in chroms], float)
+    pick = rng.choice(len(chroms), n_sample, p=lens / lens.sum())
+    flen = rng.choice(frags.length.values, n_sample)
+    exp_gc = []
+    for ci, c in enumerate(chroms):
+        m = pick == ci
+        L = int(lens[ci])
+        starts = rng.integers(0, L - 1000, m.sum())
+        for st, ln in zip(starts, flen[m]):
+            seq = fa.fetch(c, int(st), int(st + ln)).upper()
+            if "N" in seq or not seq:
+                continue
+            exp_gc.append((seq.count("G") + seq.count("C")) / len(seq))
+    exp_n, _ = np.histogram(exp_gc, GC_BINS)
+    obs_n, _ = np.histogram(frags.gc.values, GC_BINS)
+    exp_p, obs_p = exp_n / max(exp_n.sum(), 1), obs_n / max(obs_n.sum(), 1)
+    ok = (exp_n >= 50) & (obs_n >= 50)
+    centers = (GC_BINS[:-1] + GC_BINS[1:]) / 2
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = exp_p / obs_p
+    # sparse bins take the weight of the nearest well-sampled bin (edges held constant)
+    w = np.interp(centers, centers[ok], ratio[ok]) if ok.sum() >= 2 else np.ones(len(centers))
+    w = np.clip(w, 0.25, 4.0)
+    b = np.clip(np.digitize(frags.gc.values, GC_BINS) - 1, 0, len(w) - 1)
+    weights = w[b]
+    weights /= weights.mean()
+    table = pd.DataFrame({"gc_lo": GC_BINS[:-1], "gc_hi": GC_BINS[1:], "observed": obs_n,
+                          "expected": exp_n, "weight": w / np.mean(w[b])})
+    return weights, table
 
 
 def tss(args):
     os.makedirs(args.out, exist_ok=True)
     sets = pd.read_csv(args.genesets, sep="\t", comment="#")
     sites = load_tss(args.tss_bed, sets.gene).reset_index(drop=True)
-    frags = pd.read_csv(args.fragments, sep="\t", usecols=["chrom", "start", "end", "length"],
+    frags = pd.read_csv(args.fragments, sep="\t", usecols=["chrom", "start", "end", "length", "gc"],
                         dtype={"chrom": str})
-    frags = frags[frags.length.between(args.min_len, args.max_len)]
+    frags = frags[frags.length.between(args.min_len, args.max_len)].reset_index(drop=True)
     sites = sites[sites.chrom.isin(set(frags.chrom))].reset_index(drop=True)
-    cov = tss_coverage(frags, sites)
+
+    weights = None
+    if args.reference:
+        weights, gct = gc_weights(frags, args.reference)
+        gct.to_csv(f"{args.out}/tss_gc_weights.tsv", sep="\t", index=False, float_format="%.4g")
+        log(f"GC weights: range {weights.min():.2f}-{weights.max():.2f}")
+    cov = tss_coverage(frags, sites, weights=weights)
+
+    # outlier windows: abnormally high (repeats, CNVs, artefacts) or near-empty (unmappable)
+    wmean = cov.mean(axis=1)
+    med = np.median(wmean[wmean > 0]) if (wmean > 0).any() else 0
+    good = (wmean <= TSS_OUTLIER_HIGH * med) & (wmean >= TSS_OUTLIER_LOW * med)
+    # single-position spikes inside otherwise normal windows
+    cap = max(3.0, float(np.quantile(cov[good], TSS_CAP_QUANTILE))) if good.any() else np.inf
+    cov = np.minimum(cov, cap)
+
     x = np.arange(-TSS_FLANK, TSS_FLANK + 1)
     base = (np.abs(x) >= TSS_NORM[0]) & (np.abs(x) <= TSS_NORM[1])
     central = (x >= TSS_CENTRAL[0]) & (x <= TSS_CENTRAL[1])
 
     profiles, rows = {}, []
     for name, genes in sets.groupby("set").gene:
-        idx = sites.index[sites.gene.isin(set(genes))]
+        in_set = sites.gene.isin(set(genes)).values
+        idx = np.flatnonzero(in_set & good)
         if len(idx) == 0:
-            log(f"{name}: no TSSs found")
+            log(f"{name}: no usable TSSs")
             continue
         agg = cov[idx].sum(axis=0)
         baseline = agg[base].mean()
         prof = agg / baseline if baseline > 0 else np.full_like(agg, np.nan)
         profiles[name] = prof
-        rows.append({"set": name, "n_genes_found": sites.loc[idx, "gene"].nunique(),
+        rows.append({"set": name, "n_genes_found": sites.loc[in_set, "gene"].nunique(),
                      "n_genes_in_set": genes.nunique(), "n_tss": len(idx),
+                     "n_tss_excluded": int((in_set & ~good).sum()),
                      "baseline_coverage": baseline / len(idx),
                      "central_coverage": float(prof[central].mean())})
     summary = pd.DataFrame(rows)
     pd.DataFrame(profiles, index=pd.Index(x, name="position")).to_csv(
         f"{args.out}/tss_profiles.tsv", sep="\t", float_format="%.5g")
     summary.to_csv(f"{args.out}/tss_summary.tsv", sep="\t", index=False, float_format="%.5g")
+    log(f"coverage cap per TSS position: {cap:.2f}; GC correction: {'on' if weights is not None else 'off'}")
     log(summary.to_string(index=False))
 
 
@@ -587,6 +658,7 @@ def main(argv=None):
                    help="BED of TSSs with gene symbols (e.g. hg38_tss.bed / RefSeq TSS BED)")
     t.add_argument("-o", "--out", required=True, help="sample feature directory")
     t.add_argument("-g", "--genesets", default=GENESETS, help="TSV: set<TAB>gene")
+    t.add_argument("-r", "--reference", help="FASTA (faidx-indexed); enables GC-bias correction")
     t.add_argument("--min-len", type=int, default=100)
     t.add_argument("--max-len", type=int, default=220)
     t.set_defaults(func=tss)
