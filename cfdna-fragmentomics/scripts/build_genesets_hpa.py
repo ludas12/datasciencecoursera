@@ -35,7 +35,12 @@ import zipfile
 import numpy as np
 import pandas as pd
 
-HPA_URL = "https://www.proteinatlas.org/download/tsv/proteinatlas.tsv.zip"
+HPA_URLS = [  # the download path has changed between HPA releases; tried in order
+    "https://www.proteinatlas.org/download/proteinatlas.tsv.zip",
+    "https://www.proteinatlas.org/download/tsv/proteinatlas.tsv.zip",
+    "https://v24.proteinatlas.org/download/proteinatlas.tsv.zip",
+    "https://v23.proteinatlas.org/download/proteinatlas.tsv.zip",
+]
 HERE = os.path.dirname(os.path.abspath(__file__))
 CURATED = os.path.join(HERE, "..", "fragmentomics", "genesets.tsv")
 ENRICHED = re.compile(r"enriched", re.I)          # "Tissue enriched", "Group enriched", ...
@@ -45,9 +50,20 @@ MIN_SET = 20
 
 def load_hpa(path):
     if path is None:
-        print(f"Downloading {HPA_URL}", file=sys.stderr)
-        with urllib.request.urlopen(HPA_URL, timeout=300) as r:
-            raw = r.read()
+        raw, errors = None, []
+        for url in HPA_URLS:
+            print(f"Downloading {url}", file=sys.stderr)
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=300) as r:
+                    raw = r.read()
+                break
+            except Exception as e:  # noqa: BLE001 - report and try the next mirror
+                errors.append(f"{url}: {e}")
+        if raw is None:
+            sys.exit("Could not download the HPA table:\n  " + "\n  ".join(errors) +
+                     "\nDownload proteinatlas.tsv.zip from https://www.proteinatlas.org/about/download"
+                     " and rerun with --hpa proteinatlas.tsv.zip")
     else:
         with open(path, "rb") as fh:
             raw = fh.read()
