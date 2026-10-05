@@ -307,7 +307,32 @@ def load_tss(bed, genes):
     out = out[out.gene.isin(gene_set)]
     one_bp = (out.end - out.start) == 1
     out["pos"] = np.where(one_bp | (out.strand != "-"), out.start, out.end - 1)
-    return out.drop_duplicates(["chrom", "pos", "strand", "gene"])[["chrom", "pos", "strand", "gene"]]
+    return collapse_tss(out[["chrom", "pos", "strand", "gene"]])
+
+
+TSS_MERGE = 500  # TSSs of the same gene within this distance are one promoter
+
+
+def collapse_tss(sites, merge=TSS_MERGE):
+    """One TSS per promoter: start sites of the same gene (and strand) within `merge` bp are
+    collapsed to the position used by most transcripts (ties: nearest the cluster median).
+
+    Without this, a gene with many near-identical transcript starts gets many overlapping
+    windows, so a single high-coverage locus is counted many times at almost the same offset."""
+    counts = sites.groupby(["chrom", "strand", "gene", "pos"]).size().rename("n").reset_index()
+    keep = []
+    for _, g in counts.groupby(["chrom", "strand", "gene"], sort=False):
+        g = g.sort_values("pos")
+        pos, n = g.pos.values, g.n.values
+        start = 0
+        for i in range(1, len(pos) + 1):
+            if i == len(pos) or pos[i] - pos[start] > merge:
+                cp, cn = pos[start:i], n[start:i]
+                best = np.flatnonzero(cn == cn.max())
+                med = np.median(cp)
+                keep.append(g.iloc[start + best[np.argmin(np.abs(cp[best] - med))]])
+                start = i
+    return pd.DataFrame(keep)[["chrom", "pos", "strand", "gene"]].reset_index(drop=True)
 
 
 TSS_OUTLIER_HIGH = 5.0    # drop TSS windows with mean coverage > this x the median window

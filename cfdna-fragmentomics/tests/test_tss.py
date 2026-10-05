@@ -23,8 +23,13 @@ def main():
     pos = np.sort(rng.choice(np.arange(10_000, L - 10_000, 12_000), len(genes), replace=False))
     strand = rng.choice(["+", "-"], len(genes))
     # 6-column BED, 1-bp TSS intervals, name in col 4, strand in col 6
-    pd.DataFrame({"c": "chr1", "s": pos, "e": pos + 1, "g": genes, "sc": 0, "st": strand}).to_csv(
-        f"{d}/tss.bed", sep="\t", header=False, index=False)
+    bed = pd.DataFrame({"c": "chr1", "s": pos, "e": pos + 1, "g": genes, "sc": 0, "st": strand})
+    # the spiked inactive gene has 10 alternative transcripts starting within 10 bp (as in GENCODE)
+    k = len(active)
+    alt = pd.concat([bed.iloc[[k]]] * 9, ignore_index=True)
+    alt["s"] += range(1, 10)
+    alt["e"] = alt.s + 1
+    pd.concat([bed, alt]).to_csv(f"{d}/tss.bed", sep="\t", header=False, index=False)
 
     start = rng.integers(0, L - 400, n)
     length = rng.normal(167, 15, n).astype(int).clip(100, 220)
@@ -54,6 +59,8 @@ def main():
     print(s)
     hk, ctrl = s.loc["housekeeping", "central_coverage"], s.loc["inactive_control", "central_coverage"]
     assert s.loc["housekeeping", "n_genes_found"] == len(active)
+    n_ctrl = s.loc["inactive_control", "n_tss"] + s.loc["inactive_control", "n_tss_excluded"]
+    assert n_ctrl == len(inactive), n_ctrl   # 10 near-identical starts -> 1
     assert hk < 0.85, hk
     assert 0.9 < ctrl < 1.1, ctrl
     prof = pd.read_csv(f"{d}/out/tss_profiles.tsv", sep="\t", index_col=0)["housekeeping"]
