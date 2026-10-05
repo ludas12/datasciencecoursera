@@ -284,6 +284,11 @@ GENESETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "genesets.ts
 TSS_FLANK = 3000          # profile spans TSS +/- this many bp
 TSS_NORM = (2000, 3000)   # |distance| range used as the local baseline
 TSS_CENTRAL = (-150, 150) # nucleosome-depleted region; mean coverage here / baseline
+# finer windows: the nucleosome-depleted region just upstream of the TSS, and the strongly
+# positioned +1 nucleosome downstream. Core-trimmed fragments (e.g. BAL) mark the +1 nucleosome
+# sharply, which can cancel the NDR dip inside the +/-150 bp central window.
+TSS_NDR = (-200, -20)
+TSS_PLUS1 = (60, 200)
 
 
 def load_tss(bed, genes):
@@ -441,6 +446,8 @@ def tss(args):
     x = np.arange(-TSS_FLANK, TSS_FLANK + 1)
     base = (np.abs(x) >= TSS_NORM[0]) & (np.abs(x) <= TSS_NORM[1])
     central = (x >= TSS_CENTRAL[0]) & (x <= TSS_CENTRAL[1])
+    ndr = (x >= TSS_NDR[0]) & (x <= TSS_NDR[1])
+    plus1 = (x >= TSS_PLUS1[0]) & (x <= TSS_PLUS1[1])
 
     profiles, rows = {}, []
     for name, genes in sets.groupby("set").gene:
@@ -457,7 +464,9 @@ def tss(args):
                      "n_genes_in_set": genes.nunique(), "n_tss": len(idx),
                      "n_tss_excluded": int((in_set & ~good).sum()),
                      "baseline_coverage": baseline / len(idx),
-                     "central_coverage": float(prof[central].mean())})
+                     "central_coverage": float(prof[central].mean()),
+                     "ndr_coverage": float(prof[ndr].mean()),
+                     "plus1_coverage": float(prof[plus1].mean())})
     summary = pd.DataFrame(rows)
     pd.DataFrame(profiles, index=pd.Index(x, name="position")).to_csv(
         f"{args.out}/tss_profiles.tsv", sep="\t", float_format="%.5g")
@@ -590,6 +599,11 @@ def cohort(args):
             [n for n in order if n in tss_sum]]
         central.insert(0, "group", groups.loc[central.index])
         central.to_csv(f"{args.out}/tss_central_coverage.tsv", sep="\t", float_format="%.4g")
+        for col in ("ndr_coverage", "plus1_coverage"):
+            if all(col in t.columns for t in tss_sum.values()):
+                m = pd.DataFrame({n: t[col] for n, t in tss_sum.items()}).T.loc[central.index]
+                m.insert(0, "group", groups.loc[m.index])
+                m.to_csv(f"{args.out}/tss_{col}.tsv", sep="\t", float_format="%.4g")
         sets = list(next(iter(tss_prof.values())).columns)
         ncol = min(4, len(sets))
         nrow = int(np.ceil(len(sets) / ncol))

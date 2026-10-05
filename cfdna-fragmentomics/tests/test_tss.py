@@ -66,6 +66,9 @@ def main():
     prof = pd.read_csv(f"{d}/out/tss_profiles.tsv", sep="\t", index_col=0)["housekeeping"]
     down, up = prof.loc[100:250].mean(), prof.loc[-250:-100].mean()
     print(f"downstream {down:.2f}  upstream {up:.2f}")
+    ndr, p1 = s.loc["housekeeping", "ndr_coverage"], s.loc["housekeeping", "plus1_coverage"]
+    print(f"housekeeping NDR window {ndr:.2f}, +1 window {p1:.2f}")
+    assert p1 < ndr   # depletion was planted downstream, so the +1 window is lower here
     assert down < 0.6 and up > 0.8, (down, up)   # dip is downstream for both strands
     ctrl_prof = pd.read_csv(f"{d}/out/tss_profiles.tsv", sep="\t", index_col=0)["inactive_control"]
     spike = ctrl_prof.rolling(101, center=True).mean().loc[700:1100].max()
