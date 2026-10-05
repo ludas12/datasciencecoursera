@@ -599,11 +599,16 @@ def cohort(args):
             [n for n in order if n in tss_sum]]
         central.insert(0, "group", groups.loc[central.index])
         central.to_csv(f"{args.out}/tss_central_coverage.tsv", sep="\t", float_format="%.4g")
+        # primary TSS measure = the upstream nucleosome-depleted window when available
+        primary, primary_label = central, "Central TSS dip"
         for col in ("ndr_coverage", "plus1_coverage"):
             if all(col in t.columns for t in tss_sum.values()):
                 m = pd.DataFrame({n: t[col] for n, t in tss_sum.items()}).T.loc[central.index]
                 m.insert(0, "group", groups.loc[m.index])
                 m.to_csv(f"{args.out}/tss_{col}.tsv", sep="\t", float_format="%.4g")
+                if col == "ndr_coverage":
+                    primary = m
+                    primary_label = "Upstream TSS dip"
         sets = list(next(iter(tss_prof.values())).columns)
         ncol = min(4, len(sets))
         nrow = int(np.ceil(len(sets) / ncol))
@@ -616,6 +621,7 @@ def cohort(args):
                         ls=styles[rep[name] % len(styles)], label=name)
             n_tss = int(tss_sum[central.index[0]].loc[st, "n_tss"])
             ax.set_title(f"{st} ({n_tss} TSSs)", fontsize=9)
+            ax.axvspan(*TSS_NDR, color="grey", alpha=0.15, lw=0)   # primary (upstream) window
             ax.axvline(0, color="grey", lw=0.5, ls=":")
             ax.axhline(1, color="grey", lw=0.5)
         for ax in axes.flat[len(sets):]:
@@ -625,6 +631,8 @@ def cohort(args):
         for ax in axes[:, 0]:
             ax.set_ylabel("Relative coverage")
         axes.flat[0].legend(fontsize=6, frameon=False)
+        fig.suptitle(f"Shaded: upstream window used for the TSS metric ({TSS_NDR[0]} to {TSS_NDR[1]} bp)",
+                     fontsize=8)
         fig.tight_layout()
         fig.savefig(f"{args.out}/tss_profiles.png", dpi=150)
 
@@ -638,9 +646,9 @@ def cohort(args):
                "frac_400_600": "Fraction 400-600 bp (random cuts)"}
     panels = [(summary[k], v) for k, v in metrics.items() if k in summary]
     if tss_sum:
-        for st in ("lung_epithelium", "neutrophil", "housekeeping"):
-            if st in central.columns:
-                panels.append((central[st], f"TSS coverage: {st}"))
+        for st in ("housekeeping", "inactive_control", "lung_epithelium", "neutrophil"):
+            if st in primary.columns:
+                panels.append((primary[st], f"{primary_label}: {st}"))
     glist = list(gcol)
     ncol = 4
     nrow = int(np.ceil(len(panels) / ncol))

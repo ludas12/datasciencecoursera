@@ -113,6 +113,12 @@ percentile so a single artefact locus cannot dominate a set (`n_tss_excluded` in
 content (expected from 500k random genomic fragments with the sample's length distribution);
 weights are saved to `tss_gc_weights.tsv`. The Kaya scripts pass `-r` by default.
 
+Windows: `ndr_coverage` (−200 to −20 bp, the nucleosome-depleted region) is the primary measure
+and drives `key_metrics.png`; `central_coverage` (±150 bp) and `plus1_coverage` (+60 to +200 bp,
+first downstream nucleosome) are also reported. Core-trimmed fragments (BAL) mark the +1
+nucleosome sharply, which can cancel the dip in the central window. TSSs of the same gene within
+500 bp are merged so genes with many transcripts are counted once per promoter.
+
 Interpretation: compare each set with `inactive_control` (TSSs are GC-rich, so some dip can be
 technical) and with `housekeeping`. At low coverage only set-level differences between samples are
 meaningful; a lung-epithelium dip is expected in BAL but is usually too small to see in plasma.
