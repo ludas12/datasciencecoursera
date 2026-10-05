@@ -249,6 +249,97 @@ def features(args):
     log(json.dumps(summary, default=float))
 
 
+# --------------------------------------------------------------------------- tss
+GENESETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "genesets.tsv")
+TSS_FLANK = 3000          # profile spans TSS +/- this many bp
+TSS_NORM = (2000, 3000)   # |distance| range used as the local baseline
+TSS_CENTRAL = (-150, 150) # nucleosome-depleted region; mean coverage here / baseline
+
+
+def load_tss(bed, genes):
+    """TSS BED -> DataFrame(chrom, pos, strand, gene) for genes in `genes`.
+
+    The gene-name column is detected as the column with the most matches to `genes`;
+    the strand column as one holding only +/-/. values. A 1-bp interval is taken as the TSS;
+    otherwise start (+ strand) or end-1 (- strand)."""
+    df = pd.read_csv(bed, sep="\t", header=None, comment="#", dtype=str)
+    df = df[~df[0].str.startswith(("track", "browser"))]
+    gene_set = set(genes)
+    hits = {c: df[c].isin(gene_set).sum() for c in df.columns[3:]}
+    if not hits or max(hits.values()) == 0:
+        sys.exit(f"No gene-set symbols found in {bed}; first line: {df.iloc[0].tolist()}")
+    name_col = max(hits, key=hits.get)
+    strand_col = next((c for c in df.columns[3:]
+                       if df[c].isin(["+", "-", "."]).all()), None)
+    out = pd.DataFrame({"chrom": df[0], "start": df[1].astype(int), "end": df[2].astype(int),
+                        "gene": df[name_col],
+                        "strand": df[strand_col] if strand_col is not None else "+"})
+    out = out[out.gene.isin(gene_set)]
+    one_bp = (out.end - out.start) == 1
+    out["pos"] = np.where(one_bp | (out.strand != "-"), out.start, out.end - 1)
+    return out.drop_duplicates(["chrom", "pos", "strand", "gene"])[["chrom", "pos", "strand", "gene"]]
+
+
+def tss_coverage(frags, tss, flank=TSS_FLANK):
+    """Strand-oriented fragment coverage around each TSS -> array (n_tss, 2*flank+1)."""
+    width = 2 * flank + 1
+    out = np.zeros((len(tss), width))
+    max_len = int(frags.length.max()) if len(frags) else 0
+    for chrom, t in tss.groupby("chrom"):
+        f = frags[frags.chrom == chrom]
+        if f.empty:
+            continue
+        order = np.argsort(f.start.values, kind="stable")
+        st, en = f.start.values[order], f.end.values[order]
+        for i, (pos, strand) in zip(t.index, zip(t.pos.values, t.strand.values)):
+            w0, w1 = pos - flank, pos + flank + 1
+            lo = np.searchsorted(st, w0 - max_len, side="left")
+            hi = np.searchsorted(st, w1, side="left")
+            s_, e_ = st[lo:hi], en[lo:hi]
+            keep = e_ > w0
+            s_, e_ = np.clip(s_[keep], w0, w1) - w0, np.clip(e_[keep], w0, w1) - w0
+            diff = np.zeros(width + 1)
+            np.add.at(diff, s_, 1)
+            np.add.at(diff, e_, -1)
+            cov = np.cumsum(diff)[:width]
+            out[tss.index.get_loc(i)] = cov[::-1] if strand == "-" else cov
+    return out
+
+
+def tss(args):
+    os.makedirs(args.out, exist_ok=True)
+    sets = pd.read_csv(args.genesets, sep="\t", comment="#")
+    sites = load_tss(args.tss_bed, sets.gene).reset_index(drop=True)
+    frags = pd.read_csv(args.fragments, sep="\t", usecols=["chrom", "start", "end", "length"],
+                        dtype={"chrom": str})
+    frags = frags[frags.length.between(args.min_len, args.max_len)]
+    sites = sites[sites.chrom.isin(set(frags.chrom))].reset_index(drop=True)
+    cov = tss_coverage(frags, sites)
+    x = np.arange(-TSS_FLANK, TSS_FLANK + 1)
+    base = (np.abs(x) >= TSS_NORM[0]) & (np.abs(x) <= TSS_NORM[1])
+    central = (x >= TSS_CENTRAL[0]) & (x <= TSS_CENTRAL[1])
+
+    profiles, rows = {}, []
+    for name, genes in sets.groupby("set").gene:
+        idx = sites.index[sites.gene.isin(set(genes))]
+        if len(idx) == 0:
+            log(f"{name}: no TSSs found")
+            continue
+        agg = cov[idx].sum(axis=0)
+        baseline = agg[base].mean()
+        prof = agg / baseline if baseline > 0 else np.full_like(agg, np.nan)
+        profiles[name] = prof
+        rows.append({"set": name, "n_genes_found": sites.loc[idx, "gene"].nunique(),
+                     "n_genes_in_set": genes.nunique(), "n_tss": len(idx),
+                     "baseline_coverage": baseline / len(idx),
+                     "central_coverage": float(prof[central].mean())})
+    summary = pd.DataFrame(rows)
+    pd.DataFrame(profiles, index=pd.Index(x, name="position")).to_csv(
+        f"{args.out}/tss_profiles.tsv", sep="\t", float_format="%.5g")
+    summary.to_csv(f"{args.out}/tss_summary.tsv", sep="\t", index=False, float_format="%.5g")
+    log(summary.to_string(index=False))
+
+
 # --------------------------------------------------------------------------- cohort
 def cohort(args):
     import matplotlib
@@ -257,6 +348,7 @@ def cohort(args):
 
     os.makedirs(args.out, exist_ok=True)
     summaries, ratios, covs, motifs, hists = [], {}, {}, {}, {}
+    tss_sum, tss_prof = {}, {}
     for d in args.inputs:
         with open(f"{d}/summary.json") as fh:
             s = json.load(fh)
@@ -269,15 +361,21 @@ def cohort(args):
         motifs[name] = pd.read_csv(f"{d}/end_motifs.tsv", sep="\t", index_col=0)["freq"]
         h = pd.read_csv(f"{d}/size_hist.tsv", sep="\t")["count"]
         hists[name] = h / h.sum()
+        if os.path.exists(f"{d}/tss_summary.tsv"):
+            tss_sum[name] = pd.read_csv(f"{d}/tss_summary.tsv", sep="\t").set_index("set")
+            tss_prof[name] = pd.read_csv(f"{d}/tss_profiles.tsv", sep="\t", index_col=0)
 
     summary = pd.DataFrame(summaries).set_index("sample")
     groups = pd.Series("all", index=summary.index, name="group")
+    patients = pd.Series(summary.index, index=summary.index, name="patient")
     if args.samples:
         sheet = pd.read_csv(args.samples, sep="\t", dtype=str).set_index("sample")
         missing = set(summary.index) - set(sheet.index)
         if missing:
             sys.exit(f"Samples missing from {args.samples}: {sorted(missing)}")
         groups = sheet.loc[summary.index, "group"]
+        if "patient" in sheet.columns:
+            patients = sheet.loc[summary.index, "patient"].fillna(pd.Series(summary.index, index=summary.index))
     order = groups.sort_values(kind="stable").index
     summary = summary.loc[order]
     summary.insert(0, "group", groups.loc[order])
@@ -356,6 +454,67 @@ def cohort(args):
     fig.tight_layout()
     fig.savefig(f"{args.out}/delfi_ratio_heatmap.png", dpi=150)
 
+    # TSS coverage profiles (if `tss` was run)
+    if tss_sum:
+        central = pd.DataFrame({n: t["central_coverage"] for n, t in tss_sum.items()}).T.loc[
+            [n for n in order if n in tss_sum]]
+        central.insert(0, "group", groups.loc[central.index])
+        central.to_csv(f"{args.out}/tss_central_coverage.tsv", sep="\t", float_format="%.4g")
+        sets = list(next(iter(tss_prof.values())).columns)
+        ncol = min(4, len(sets))
+        nrow = int(np.ceil(len(sets) / ncol))
+        fig, axes = plt.subplots(nrow, ncol, figsize=(3.6 * ncol, 3 * nrow), squeeze=False,
+                                 sharex=True)
+        for ax, st in zip(axes.flat, sets):
+            for name in central.index:
+                prof = tss_prof[name][st].rolling(101, center=True, min_periods=1).mean()
+                ax.plot(prof.index, prof.values, lw=1, color=gcol[groups[name]],
+                        ls=styles[rep[name] % len(styles)], label=name)
+            n_tss = int(tss_sum[central.index[0]].loc[st, "n_tss"])
+            ax.set_title(f"{st} ({n_tss} TSSs)", fontsize=9)
+            ax.axvline(0, color="grey", lw=0.5, ls=":")
+            ax.axhline(1, color="grey", lw=0.5)
+        for ax in axes.flat[len(sets):]:
+            ax.set_axis_off()
+        for ax in axes[-1]:
+            ax.set_xlabel("Distance to TSS (bp)")
+        for ax in axes[:, 0]:
+            ax.set_ylabel("Relative coverage")
+        axes.flat[0].legend(fontsize=6, frameon=False)
+        fig.tight_layout()
+        fig.savefig(f"{args.out}/tss_profiles.png", dpi=150)
+
+    # Key metrics per sample; samples from the same patient joined by a line
+    metrics = {"median_len": "Median length (bp)", "frac_lt150": "Fraction < 150 bp",
+               "short_long_ratio": "Short/long ratio",
+               "frac_dinucleosome_250_450": "Di-nucleosomal fraction",
+               "motif_CCCA": "CCCA end-motif freq.", "motif_diversity_score": "Motif diversity"}
+    panels = [(summary[k], v) for k, v in metrics.items()]
+    if tss_sum:
+        for st in ("lung_epithelium", "neutrophil", "housekeeping"):
+            if st in central.columns:
+                panels.append((central[st], f"TSS coverage: {st}"))
+    glist = list(gcol)
+    ncol = 4
+    nrow = int(np.ceil(len(panels) / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(3.4 * ncol, 3 * nrow), squeeze=False)
+    for ax, (vals, title) in zip(axes.flat, panels):
+        xpos = {n: glist.index(groups[n]) for n in vals.index}
+        for pt, members in vals.groupby(patients.loc[vals.index]).groups.items():
+            if len(members) > 1:
+                ax.plot([xpos[m] for m in members], vals.loc[members], color="grey", lw=0.8, zorder=1)
+        for n, v in vals.items():
+            ax.scatter(xpos[n], v, color=gcol[groups[n]], s=36, zorder=2)
+        ax.set_xticks(range(len(glist)), glist, fontsize=7, rotation=20)
+        ax.set_title(title, fontsize=9)
+        ax.set_xlim(-0.5, len(glist) - 0.5)
+        ax.ticklabel_format(axis="y", useOffset=False)
+    for ax in axes.flat[len(panels):]:
+        ax.set_axis_off()
+    fig.suptitle("Per-sample values (lines join samples from the same patient)", fontsize=9)
+    fig.tight_layout()
+    fig.savefig(f"{args.out}/key_metrics.png", dpi=150)
+
 
 # --------------------------------------------------------------------------- cli
 def main(argv=None):
@@ -384,6 +543,16 @@ def main(argv=None):
     f.add_argument("--chroms", default=AUTOSOMES,
                    help="regex of contigs used for size/motif/bin features (default autosomes)")
     f.set_defaults(func=features)
+
+    t = sub.add_parser("tss", help="fragment table -> aggregate TSS coverage per gene set")
+    t.add_argument("-f", "--fragments", required=True)
+    t.add_argument("-t", "--tss-bed", required=True,
+                   help="BED of TSSs with gene symbols (e.g. hg38_tss.bed / RefSeq TSS BED)")
+    t.add_argument("-o", "--out", required=True, help="sample feature directory")
+    t.add_argument("-g", "--genesets", default=GENESETS, help="TSV: set<TAB>gene")
+    t.add_argument("--min-len", type=int, default=100)
+    t.add_argument("--max-len", type=int, default=220)
+    t.set_defaults(func=tss)
 
     c = sub.add_parser("cohort", help="merge per-sample features")
     c.add_argument("-i", "--inputs", nargs="+", required=True, help="feature directories")

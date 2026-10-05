@@ -91,6 +91,25 @@ Outputs in `results/cohort/`: `size_distribution.png`, `pca.png`, `delfi_ratio_h
   sample processed the same way. HC7/HC8 are useful here if one of them is male.
 - **ichorCNA** estimates *tumour* fraction; it is not meaningful for transplant samples.
 
+## TSS coverage profiles (tissue-of-origin signal)
+Active promoters are nucleosome-depleted, so cfDNA from cells expressing a gene shows a coverage
+dip at its transcription start site. `cfdna_frag.py tss` aggregates fragment coverage (100–220 bp
+fragments) over the TSSs of each gene set in `fragmentomics/genesets.tsv`: lung epithelium,
+neutrophil, lymphocyte, megakaryocyte/erythroid, liver, housekeeping (positive control) and
+inactive genes (negative control). Profiles are strand-oriented and normalised to the
+±2–3 kb flanks; `central_coverage` is the mean over ±150 bp (lower = more open/active).
+
+```bash
+python fragmentomics/cfdna_frag.py tss -f frags/S1.frags.tsv.gz -t hg38_tss.bed -o features/S1
+```
+The TSS BED needs gene symbols in one column (detected automatically) and ideally strand.
+On Kaya, `sbatch scripts/kaya_tss.sbatch` runs it for all samples of a finished run and refreshes
+`cohort/` (`tss_profiles.png`, `tss_central_coverage.tsv`, `key_metrics.png`).
+
+Interpretation: compare each set with `inactive_control` (TSSs are GC-rich, so some dip can be
+technical) and with `housekeeping`. At low coverage only set-level differences between samples are
+meaningful; a lung-epithelium dip is expected in BAL but is usually too small to see in plasma.
+
 ## Low-coverage notes
 - **Depth needed:** size distribution and end motifs are stable from ~1M fragments. DELFI ratios at
   5 Mb bins work from ~0.1x (~1–2M fragments → a few thousand per bin). Use `--bin-size 10000000` below that.

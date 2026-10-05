@@ -6,11 +6,21 @@ T=$(mktemp -d)
 python tests/make_test_data.py "$T" 0  healthy1 1
 python tests/make_test_data.py "$T" 0  healthy2 2   # same reference (seeded from the outdir's ref)
 python tests/make_test_data.py "$T" 15 cancer1  3
+# TSS BED for every gene-set gene at random positions on the simulated genome
+python - "$T" <<'PY'
+import sys, numpy as np, pandas as pd
+g = pd.read_csv("fragmentomics/genesets.tsv", sep="\t", comment="#").gene.unique()
+rng = np.random.default_rng(0)
+pd.DataFrame({"c": rng.choice(["chr1", "chr2"], len(g)), "s": rng.integers(10000, 1900000, len(g))}
+            ).assign(e=lambda d: d.s + 1, g=g, sc=0, st=rng.choice(["+", "-"], len(g))
+            ).to_csv(f"{sys.argv[1]}/tss.bed", sep="\t", header=False, index=False)
+PY
 for s in healthy1 healthy2 cancer1; do
   python fragmentomics/cfdna_frag.py extract -b "$T/$s.bam" -r "$T/ref.fa" -o "$T/$s.frags.tsv.gz" --blacklist "$T/blacklist.bed"
   python fragmentomics/cfdna_frag.py features -f "$T/$s.frags.tsv.gz" -r "$T/ref.fa" -o "$T/features/$s" --bin-size 500000
+  python fragmentomics/cfdna_frag.py tss -f "$T/$s.frags.tsv.gz" -t "$T/tss.bed" -o "$T/features/$s"
 done
-printf "sample\tgroup\nhealthy1\thealthy\nhealthy2\thealthy\ncancer1\tcase\n" > "$T/samples.tsv"
+printf "sample\tgroup\tpatient\nhealthy1\thealthy\tP1\nhealthy2\thealthy\tP2\ncancer1\tcase\tP1\n" > "$T/samples.tsv"
 python fragmentomics/cfdna_frag.py cohort -i "$T"/features/* -s "$T/samples.tsv" -o "$T/cohort"
 python - "$T" <<'PY'
 import sys, pandas as pd
