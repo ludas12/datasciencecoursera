@@ -47,4 +47,4 @@ for f in cpgIslandExt.txt.gz ncbiRefSeqCurated.txt.gz; do
     [[ -s "$ANNOT_DIR/$f" ]] || curl -fsSL "$UCSC/$f" -o "$ANNOT_DIR/$f" || die "download of $f failed"
 done
 
-log "downstream setup done. Next: bash downstream/run_downstream.sh"
+log "downstream setup done. Next: bash run_downstream.sh"
