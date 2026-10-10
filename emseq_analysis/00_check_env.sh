@@ -41,7 +41,13 @@ fi
 if [[ -f "$GENOME_FA" ]]; then echo "  GENOME_FA        $GENOME_FA"
 else echo "  GENOME_FA        NOT FOUND: $GENOME_FA"; fail=1; fi
 if [[ "$CONTROLS_FA" == "download" ]]; then echo "  CONTROLS_FA      will be downloaded from NEB GitHub"
-elif [[ -z "$CONTROLS_FA" ]]; then echo "  CONTROLS_FA      none (conversion QC disabled)"
+elif [[ -z "$CONTROLS_FA" ]]; then
+    in_genome=""
+    if [[ -n "$CONTROL_UNMETH" && -f "$GENOME_FA.fai" ]] && cut -f1 "$GENOME_FA.fai" | grep -qx "$CONTROL_UNMETH"; then
+        in_genome=yes
+    fi
+    if [[ -n "$in_genome" ]]; then echo "  CONTROLS_FA      none needed: $CONTROL_UNMETH/$CONTROL_METH already in GENOME_FA"
+    else echo "  CONTROLS_FA      none (conversion QC disabled unless the controls are in GENOME_FA)"; fi
 elif [[ -f "$CONTROLS_FA" ]]; then echo "  CONTROLS_FA      $CONTROLS_FA"
 else echo "  CONTROLS_FA      NOT FOUND: $CONTROLS_FA"; fail=1; fi
 
