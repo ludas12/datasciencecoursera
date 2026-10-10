@@ -106,6 +106,14 @@ def control_metrics(meth, s, unmeth_ctrl, meth_ctrl):
     return out
 
 
+def internal_conv_metrics(meth, s):
+    chh = bedgraph_counts(meth / f"{s}.internal_CHH.bedGraph")
+    p = pct(chh)
+    return {"genome_pct_meth_CHH": p,
+            "internal_conversion_pct": None if p is None else 100 - p,
+            "CHH_calls": sum(chh) if chh else 0}
+
+
 def genome_cpg_metrics(meth, s, controls):
     path = meth / f"{s}_CpG.bedGraph.gz"
     if not path.exists():
@@ -155,12 +163,14 @@ def main():
     controls = {c for c in (unmeth_ctrl, meth_ctrl) if c}
     controls |= {"phage_lambda", "plasmid_puc19c", "phage_T4", "phage_Xp12"}
     thr = {k: float(cfg[k]) for k in ("MAX_LAMBDA_CPG_METH", "MIN_PUC19_CPG_METH",
-                                     "MIN_MAPPING_RATE", "MAX_DUP_RATE")}
+                                     "MIN_MAPPING_RATE", "MAX_DUP_RATE",
+                                     "MAX_CHH_METH", "MIN_CONTROL_CALLS")}
 
     sheet = outdir / "samplesheet.tsv"
     samples = [l.split("\t")[0] for l in sheet.read_text().splitlines()[1:] if l.strip()]
     cols = ["sample", "status", "raw_reads", "reads_after_trim", "pct_reads_kept", "pct_q30_raw",
-            "gc_pct_trimmed", "pct_mapped", "pct_duplicates", "conversion_efficiency_pct",
+            "gc_pct_trimmed", "pct_mapped", "pct_duplicates", "internal_conversion_pct",
+            "genome_pct_meth_CHH", "CHH_calls", "conversion_efficiency_pct",
             "lambda_pct_meth_CpG", "lambda_pct_meth_nonCpG", "lambda_CpG_calls",
             "puc19_pct_meth_CpG", "puc19_CpG_calls", "genome_pct_meth_CpG", "CpGs_covered",
             "CpGs_cov5", "CpGs_cov10", "mean_CpG_depth", "flags", "mbias_suggestion"]
@@ -174,6 +184,7 @@ def main():
         r.update(flagstat_metrics(d / "qc", s))
         r.update(bismark_metrics(d / "qc", s))
         r.update(control_metrics(d / "meth", s, unmeth_ctrl, meth_ctrl))
+        r.update(internal_conv_metrics(d / "meth", s))
         r.update(genome_cpg_metrics(d / "meth", s, controls))
         r["mbias_suggestion"] = mbias_suggestion(d / "mbias", s)
 
@@ -182,16 +193,23 @@ def main():
             v = r.get(key)
             if v is not None and bad(v):
                 flags.append(msg.format(v))
-        check("lambda_pct_meth_CpG", lambda v: v > thr["MAX_LAMBDA_CPG_METH"],
-              "lambda CpG meth {:.2f}% (incomplete conversion)")
-        check("puc19_pct_meth_CpG", lambda v: v < thr["MIN_PUC19_CPG_METH"],
-              "pUC19 CpG meth {:.1f}% (over-conversion / protection failure)")
+        min_calls = thr["MIN_CONTROL_CALLS"]
+        lam_n, puc_n = r.get("lambda_CpG_calls") or 0, r.get("puc19_CpG_calls") or 0
+        # Spike-in percentages are only meaningful with enough calls.
+        if unmeth_ctrl and lam_n < min_calls:
+            flags.append(f"only {lam_n} lambda CpG calls: too few to judge conversion")
+        else:
+            check("lambda_pct_meth_CpG", lambda v: v > thr["MAX_LAMBDA_CPG_METH"],
+                  "lambda CpG meth {:.2f}% (incomplete conversion)")
+        if meth_ctrl and puc_n < min_calls:
+            flags.append(f"only {puc_n} pUC19 CpG calls: too few to judge 5mC protection")
+        else:
+            check("puc19_pct_meth_CpG", lambda v: v < thr["MIN_PUC19_CPG_METH"],
+                  "pUC19 CpG meth {:.1f}% (over-conversion / protection failure)")
+        check("genome_pct_meth_CHH", lambda v: v > thr["MAX_CHH_METH"],
+              "genomic CHH meth {:.2f}% (incomplete conversion)")
         check("pct_mapped", lambda v: v < thr["MIN_MAPPING_RATE"], "mapping {:.1f}%")
         check("pct_duplicates", lambda v: v > thr["MAX_DUP_RATE"], "duplicates {:.1f}%")
-        if unmeth_ctrl and not r.get("lambda_CpG_calls"):
-            flags.append("no lambda reads (spike-in missing?)")
-        if meth_ctrl and not r.get("puc19_CpG_calls"):
-            flags.append("no pUC19 reads (spike-in missing?)")
         r.setdefault("status", "WARN" if flags else "PASS")
         r["flags"] = "; ".join(flags)
         rows.append(r)
@@ -205,8 +223,10 @@ def main():
 
     show = [("sample", "sample"), ("status", "status"), ("raw_reads", "raw reads"),
             ("pct_mapped", "%map"), ("pct_duplicates", "%dup"),
-            ("conversion_efficiency_pct", "conv%"), ("lambda_pct_meth_CpG", "lambda CpG%"),
-            ("puc19_pct_meth_CpG", "pUC19 CpG%"), ("genome_pct_meth_CpG", "genome CpG%"),
+            ("internal_conversion_pct", "conv% (CHH)"), ("lambda_pct_meth_CpG", "lambda CpG%"),
+            ("lambda_CpG_calls", "lambda n"), ("puc19_pct_meth_CpG", "pUC19 CpG%"),
+            ("puc19_CpG_calls", "pUC19 n"), ("genome_pct_meth_CpG", "genome CpG%"),
+            ("mean_CpG_depth", "CpG depth"), ("CpGs_cov5", "CpGs>=5x"),
             ("CpGs_cov10", "CpGs>=10x")]
     table = [[h for _, h in show]] + [[fmt(r.get(k)) for k, _ in show] for r in rows]
     widths = [max(len(row[i]) for row in table) for i in range(len(show))]

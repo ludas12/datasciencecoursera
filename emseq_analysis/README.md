@@ -70,7 +70,8 @@ Check `summary/qc_summary.txt` first:
 
 | Metric | Good EM-seq | Problem it reveals |
 |---|---|---|
-| `lambda_pct_meth_CpG` / `conversion_efficiency_pct` | ≲ 0.5 % / ≥ 99.5 % | incomplete enzymatic conversion (APOBEC step) |
+| `lambda_pct_meth_CpG` / `conversion_efficiency_pct` | ≲ 0.5 % / ≥ 99.5 % | incomplete enzymatic conversion (APOBEC step); judged only with ≥ `MIN_CONTROL_CALLS` (200) lambda CpG calls |
+| `genome_pct_meth_CHH` / `internal_conversion_pct` | ≲ 1 % / ≥ 99 % | same, measured on the sample's own DNA (CHH on `INTERNAL_CONV_REGION`, default chr22); works when spike-in reads are scarce |
 | `puc19_pct_meth_CpG` | ≳ 95 % | 5mC not protected (TET2/oxidation step failed) |
 | `pct_mapped` | ≳ 70–80 % (bwa-meth) | adapter dimers, contamination, wrong genome |
 | `pct_duplicates` | low (depends on input / depth) | low library complexity / too little input DNA |

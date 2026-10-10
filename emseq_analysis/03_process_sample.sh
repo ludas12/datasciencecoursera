@@ -130,4 +130,20 @@ if ! is_done "$S" extract; then
     mark_done "$S" extract
 fi
 
+# ---- 6. internal conversion check: non-CpG methylation of the sample's own DNA --
+# Non-CpG (CHH) methylation is ~0 in most human tissues, so CHH methylation on a
+# chromosome estimates conversion even when spike-in reads are scarce.
+if ! is_done "$S" internal_conv; then
+    if [[ -n "$INTERNAL_CONV_REGION" ]] && cut -f1 "$REF_FA.fai" | grep -qx "${INTERNAL_CONV_REGION%%:*}"; then
+        log "MethylDackel CHH on $INTERNAL_CONV_REGION (internal conversion estimate)"
+        # shellcheck disable=SC2206
+        MethylDackel extract -@ "$THREADS" -q "$MIN_MAPQ" -p "$MIN_BASEQ" $MD_INCLUSION \
+            --noCpG --CHH -r "$INTERNAL_CONV_REGION" \
+            -o "$S/meth/$sample.internal" "$REF_FA" "$FINAL_BAM"
+        mark_done "$S" internal_conv
+    else
+        log "WARNING: INTERNAL_CONV_REGION '$INTERNAL_CONV_REGION' not in reference; skipping"
+    fi
+fi
+
 log "sample $sample finished"

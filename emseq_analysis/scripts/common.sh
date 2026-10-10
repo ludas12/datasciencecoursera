@@ -9,6 +9,11 @@ EMSEQ_CONFIG="${EMSEQ_CONFIG:-$PIPE_DIR/config.sh}"
 source "$EMSEQ_CONFIG"
 export EMSEQ_CONFIG
 
+# Settings added after the first release; override them in config.sh if needed.
+: "${INTERNAL_CONV_REGION:=chr22}"   # region whose non-CpG (CHH) methylation estimates conversion
+: "${MAX_CHH_METH:=1.0}"             # % CHH methylation above which conversion is flagged
+: "${MIN_CONTROL_CALLS:=200}"        # spike-in CpG calls needed before judging lambda/pUC19
+
 REF_DIR="$OUTDIR/reference"
 REF_FA="$REF_DIR/genome_with_controls.fa"
 SAMPLESHEET="$OUTDIR/samplesheet.tsv"
