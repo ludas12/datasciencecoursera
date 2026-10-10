@@ -95,3 +95,36 @@ bash 04_summarize.sh
 - **Spike-in controls:** with `CONTROLS_FA="download"`, NEB's control FASTA is downloaded from GitHub, which needs internet on the node that runs step 02. If compute nodes are offline, run `bash 02_prepare_reference.sh` on a login/data-mover node, or download the file and set `CONTROLS_FA` to its path.
 - **Library type:** EM-seq libraries are directional, which both aligners assume by default.
 - **Downstream analysis:** `meth/*_CpG.bedGraph.gz` files load directly into R for differential methylation (methylKit, DSS, dmrseq) once the QC looks good.
+
+## Downstream analysis (steps 05–06)
+
+These steps run after the main pipeline. Sample labels, types and timepoints are set in `downstream/samples.tsv`, and the pairs to compare in `downstream/comparisons.tsv`. Edit both for a new project.
+
+```bash
+bash downstream/setup_downstream.sh   # once, on the LOGIN node (internet):
+                                      #  conda env emseq_downstream, wgbstools + UXM, UCSC annotation
+bash run_downstream.sh                # submits 05 and 06 (or: bash run_downstream.sh 05)
+```
+
+### 05: region-level methylation (`OUTDIR/downstream/regions/results/`)
+At ~1–2× CpG depth, single CpGs are too noisy, so CpG calls are summed over larger regions: 10 kb bins, CpG islands (UCSC) and promoters (RefSeq TSS ± 1 kb). Only autosomes are used, and a region must have at least `MIN_REGION_CALLS` (10) calls in every sample. Outputs for each region set:
+- methylation matrix
+- per-sample summary
+- correlation heatmap
+- PCA
+- distributions
+- one table and scatter plot per comparison, with the difference (`group_b − group_a`), a two-proportion z-test and BH FDR
+
+With one sample per group, the p-values only measure read-sampling noise, not biological variation. Use them to rank regions, not as formal statistical evidence.
+
+### 06: tissue / cell-of-origin (`OUTDIR/downstream/tissue_of_origin/`)
+This step uses [UXM](https://github.com/nloyfer/UXM_deconv) with the human methylation atlas of [Loyfer et al. 2023, *Nature*](https://www.nature.com/articles/s41586-022-05580-6), which has 39 cell types and the `U250` marker set by default. It estimates what fraction of the DNA comes from each cell type, for example lung alveolar and bronchial epithelium, neutrophils, monocytes/macrophages, lymphocytes, endothelium and liver.
+
+Outputs:
+- `uxm_deconv.csv`: all cell types
+- `uxm_grouped.tsv/.png`: grouped by compartment
+- `uxm_deconv.pdf`
+
+In a lung transplant recipient, plasma cfDNA from lung epithelium is expected to come largely from the donor lung. This method cannot tell donor DNA from recipient DNA; that needs genotype-based donor-derived cfDNA assays.
+
+UXM and wgbstools are under the authors' academic/research licences. They are downloaded by the setup script, not redistributed here. If you use them, cite Loyfer et al. 2023.
