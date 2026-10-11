@@ -28,11 +28,12 @@ done < "$SAMPLE_INFO"
 n=$(wc -l < "$jobs")
 if [[ $n -gt 0 ]]; then
     log "extracting fragments from $n libraries"
-    export PIPE_DIR REF_FA REFSEQ
+    log "TSS gene sets: $FRAG_GENESETS"
+    export PIPE_DIR REF_FA REFSEQ FRAG_GENESETS
     # shellcheck disable=SC2016
     xargs -P "$DOWNSTREAM_THREADS" -L 1 bash -c 'python3 "$PIPE_DIR/downstream/fragmentomics.py" extract \
         --bam "$0" --label "$1" --clip "$2" "$3" --out "$4" \
-        --fasta "$REF_FA" --fai "$REF_FA.fai" --refseq "$REFSEQ"' < "$jobs"
+        --fasta "$REF_FA" --fai "$REF_FA.fai" --refseq "$REFSEQ" --genesets "$FRAG_GENESETS"' < "$jobs"
 fi
 python3 "$PIPE_DIR/downstream/fragmentomics.py" summarize --dir "$F/per_library" \
-    --sample-info "$SAMPLE_INFO" --out "$F" | tee "$F/fragmentomics_summary.txt"
+    --sample-info "$SAMPLE_INFO" --genesets "$FRAG_GENESETS" --out "$F" | tee "$F/fragmentomics_summary.txt"

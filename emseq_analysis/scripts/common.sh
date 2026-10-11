@@ -32,7 +32,13 @@ export EMSEQ_CONFIG
 : "${BIN_SIZE:=10000}"                    # genomic bin size for step 05
 : "${MIN_REGION_CALLS:=10}"               # CpG calls a region needs in every sample (step 05)
 : "${MIN_COMPARE_CALLS:=50}"              # calls in both samples for a region to be compared (05)
-: "${IDENTITY_REGIONS:=chr20,chr21,chr22}"   # regions genotyped by step 08
+: "${IDENTITY_REGIONS:=chr20,chr21,chr22}"
+# Gene sets for TSS footprints (step 09): the large Human Protein Atlas sets if built
+# (downstream/build_genesets_hpa.py), otherwise the curated sets.
+if [[ -z "${FRAG_GENESETS:-}" ]]; then
+    FRAG_GENESETS="$PIPE_DIR/downstream/genesets.tsv"
+    if [[ -s "$PIPE_DIR/downstream/genesets_hpa.tsv" ]]; then FRAG_GENESETS="$PIPE_DIR/downstream/genesets_hpa.tsv"; fi
+fi   # regions genotyped by step 08
 : "${MAX_COV_FOLD:=10}"                   # exclude regions > this x median calls (repeats; 05)
 BLACKLIST_URL="https://raw.githubusercontent.com/Boyle-Lab/Blacklist/master/lists/hg38-blacklist.v2.bed.gz"
 : "${UXM_ATLAS:=Atlas.U250.l4.hg38.full.tsv}"  # Loyfer et al. 2023 atlas used by step 06
