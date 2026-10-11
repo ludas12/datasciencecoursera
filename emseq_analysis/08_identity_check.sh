@@ -11,7 +11,7 @@
 # shellcheck disable=SC1091
 source "${PIPE_DIR:-$(dirname "$0")}/scripts/common.sh"
 activate_env "$DOWNSTREAM_ENV"
-command -v bcftools >/dev/null || die "bcftools missing: conda install -n $DOWNSTREAM_ENV -c bioconda bcftools"
+bcftools --version >/dev/null 2>&1 || die "bcftools missing or broken (e.g. an old build needing libcrypto.so.1.0.0). Fix: conda install -n $DOWNSTREAM_ENV -c conda-forge -c bioconda 'bcftools>=1.17' 'htslib>=1.17'"
 
 I="$OUTDIR/summary/identity"
 mkdir -p "$I/vcf"
