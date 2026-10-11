@@ -16,6 +16,11 @@ export EMSEQ_CONFIG
 # Pixel distance for optical/clustering duplicates (samtools markdup -d): 2500 for
 # patterned flow cells (NovaSeq, NextSeq 2000, NovaSeq X), 100 for older ones, 0 = off.
 : "${OPTICAL_DUP_DISTANCE:=2500}"
+# Keep true fragment ends for fragmentomics (step 09): reads are not clipped before
+# alignment; instead MethylDackel ignores CLIP_5P_R1/R2 bases at the read starts when
+# calling methylation (--nOT/--nOB), so methylation results are equivalent.
+# Do not put --nOT/--nOB in MD_INCLUSION when this is on.
+: "${KEEP_FRAGMENT_ENDS:=true}"
 # Protection-step proxy for libraries without the pUC19 spike-in (step 04):
 : "${MIN_IMPRINTED_METH:=30}"        # imprinted promoters are ~50 % methylated in all tissues
 : "${MAX_IMPRINTED_METH:=70}"

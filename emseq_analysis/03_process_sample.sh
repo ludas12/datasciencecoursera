@@ -39,14 +39,19 @@ if ! is_done "$S" trim && ! is_done "$S" align; then
         in1="$S/trim/merged_R1.fq.gz"; cat "${r1_files[@]}" > "$in1"
         if $paired; then in2="$S/trim/merged_R2.fq.gz"; cat "${r2_files[@]}" > "$in2"; fi
     fi
+    # With KEEP_FRAGMENT_ENDS the 5' bases stay in the alignment (true fragment ends)
+    # and are excluded at methylation calling instead.
+    clip1=$CLIP_5P_R1; clip2=$CLIP_5P_R2
+    [[ "$KEEP_FRAGMENT_ENDS" == true ]] && { clip1=0; clip2=0; }
+    echo "$clip1 $clip2" > "$S/qc/$sample.clip5p.txt"     # bp clipped before alignment (R1 R2)
     fastp_args=(-i "$in1" -o "$T1"
-        --trim_front1 "$CLIP_5P_R1" --trim_tail1 "$CLIP_3P_R1"
+        --trim_front1 "$clip1" --trim_tail1 "$CLIP_3P_R1"
         --length_required "$MIN_READ_LEN"
         --thread "$(( THREADS > 16 ? 16 : THREADS ))"
         --json "$S/qc/$sample.fastp.json" --html "$S/qc/$sample.fastp.html"
         --report_title "$sample")
     $paired && fastp_args+=(-I "$in2" -O "$T2" --detect_adapter_for_pe
-        --trim_front2 "$CLIP_5P_R2" --trim_tail2 "$CLIP_3P_R2")
+        --trim_front2 "$clip2" --trim_tail2 "$CLIP_3P_R2")
     if [[ "$TRIM_POLY_G" == true ]]; then fastp_args+=(--trim_poly_g)
     else fastp_args+=(--disable_trim_poly_g); fi
     log "fastp"
@@ -97,6 +102,14 @@ if ! is_done "$S" align; then
     mark_done "$S" align
 fi
 
+# Read starts not clipped before alignment are excluded when calling methylation.
+# Libraries aligned before clip5p.txt existed were clipped by CLIP_5P_R1/R2.
+read -r aln_clip1 aln_clip2 < <(cat "$S/qc/$sample.clip5p.txt" 2>/dev/null || echo "$CLIP_5P_R1 $CLIP_5P_R2")
+md_ends=()
+ex1=$(( CLIP_5P_R1 - aln_clip1 )); ex2=$(( CLIP_5P_R2 - aln_clip2 ))
+(( ex1 < 0 )) && ex1=0; (( ex2 < 0 )) && ex2=0
+if (( ex1 > 0 || ex2 > 0 )); then md_ends=(--nOT "$ex1,0,$ex2,0" --nOB "$ex1,0,$ex2,0"); fi
+
 # ---- 3. alignment QC -----------------------------------------------------------
 if ! is_done "$S" qc; then
     log "alignment QC"
@@ -118,8 +131,8 @@ fi
 # ---- 5. methylation calls ------------------------------------------------------
 if ! is_done "$S" extract; then
     # shellcheck disable=SC2206
-    md=(-@ "$THREADS" -q "$MIN_MAPQ" -p "$MIN_BASEQ" $MD_INCLUSION)
-    log "MethylDackel extract (CpG, strands merged)${MD_INCLUSION:+ with $MD_INCLUSION}"
+    md=(-@ "$THREADS" -q "$MIN_MAPQ" -p "$MIN_BASEQ" ${md_ends[@]+"${md_ends[@]}"} $MD_INCLUSION)
+    log "MethylDackel extract (CpG, strands merged) ${md_ends[*]} $MD_INCLUSION"
     MethylDackel extract "${md[@]}" --mergeContext -o "$S/meth/$sample" "$REF_FA" "$FINAL_BAM"
     if [[ "$MD_METHYLKIT" == true ]]; then
         log "MethylDackel extract (methylKit format)"
@@ -142,7 +155,7 @@ if ! is_done "$S" internal_conv; then
     if [[ -n "$INTERNAL_CONV_REGION" ]] && cut -f1 "$REF_FA.fai" | grep -qx "${INTERNAL_CONV_REGION%%:*}"; then
         log "MethylDackel CHH on $INTERNAL_CONV_REGION (internal conversion estimate)"
         # shellcheck disable=SC2206
-        MethylDackel extract -@ "$THREADS" -q "$MIN_MAPQ" -p "$MIN_BASEQ" $MD_INCLUSION \
+        MethylDackel extract -@ "$THREADS" -q "$MIN_MAPQ" -p "$MIN_BASEQ" ${md_ends[@]+"${md_ends[@]}"} $MD_INCLUSION \
             --noCpG --CHH -r "$INTERNAL_CONV_REGION" \
             -o "$S/meth/$sample.internal" "$REF_FA" "$FINAL_BAM"
         mark_done "$S" internal_conv

@@ -176,3 +176,18 @@ Give SeqMonk ≥ 8 GB of memory (Edit → Preferences).
 Outputs are in `OUTDIR/summary/identity/`: `identity_check.tsv`, `identity_matrix.tsv` and `.png`.
 
 This needs `bcftools` in the downstream env. `downstream/setup_downstream.sh` installs it, or install it with `conda install -n emseq_downstream -c bioconda bcftools`. I tested the step on simulated EM-seq libraries at ~1× and ~7× depth, including a deliberately swapped label.
+
+## Fragmentomics (step 09)
+
+`bash run_downstream.sh 09` (or `bash 09_fragmentomics.sh`) analyses cfDNA fragmentation from the same BAMs, with no extra sequencing. Results go to `OUTDIR/downstream/fragmentomics/`:
+
+| Output | Content |
+|---|---|
+| `fragment_summary.tsv`, `fragment_sizes.png/.tsv` | Size distribution per library: median, mode, % < 150 bp, short (100–150) / long (151–220) ratio, % di-nucleosomal (250–400 bp), end-motif diversity, CCCA % |
+| `short_long_bins.tsv`, `short_long_profile.png` | Genome-wide short/long ratio in 5 Mb bins (DELFI-style), GC-corrected, shown relative to healthy controls (`type` = healthy) or to all libraries |
+| `tss_footprints.tsv/.png` | Fragment coverage ±2 kb around the TSSs of marker gene sets (lung epithelium, neutrophil, megakaryocyte, liver, housekeeping). A dip at the TSS means the promoter was open in the source cells. These sets have 9–24 genes, so at ~1× coverage the curves are noisy; they become informative with depth or capture |
+| `end_motifs.tsv` | 4-mer frequencies at fragment ends, read from the reference, so EM-seq conversion doesn't affect them |
+
+**Fragment ends.** Fragmentomics needs the true fragment ends. Since this change, `KEEP_FRAGMENT_ENDS=true` (the default) stops fastp from clipping the 5′ read ends. Instead, MethylDackel ignores those `CLIP_5P_R1/R2` bases at methylation calling (`--nOT/--nOB`), so methylation results are equivalent. Each library records what was clipped before alignment in `qc/<sample>.clip5p.txt`.
+
+Libraries aligned earlier, such as the pilot, were clipped. Step 09 restores their ends from the `CLIP_5P` settings, so their sizes are correct as well.
