@@ -5,11 +5,15 @@ usage: qc_summary.py OUTDIR CONFIG_KEY=VALUE ...
 Reads OUTDIR/samples/<sample>/{qc,meth,mbias} and writes
 OUTDIR/summary/qc_summary.tsv.
 """
+import bisect
 import gzip
 import json
 import re
+import statistics
 import sys
 from pathlib import Path
+
+MIN_IMPRINT_CALLS = 20      # calls a gene's imprinted promoter needs to count
 
 
 def read_text(path):
@@ -114,13 +118,27 @@ def internal_conv_metrics(meth, s):
             "CHH_calls": sum(chh) if chh else 0}
 
 
-def genome_cpg_metrics(meth, s, controls):
+def load_regions(path):
+    """BED (chr, start, end, name) -> {chr: (sorted starts, [(start, end, name)])}."""
+    regions = {}
+    if not path or not Path(path).exists():
+        return regions
+    for line in open(path):
+        f = line.rstrip("\n").split("\t")
+        if len(f) >= 4:
+            regions.setdefault(f[0], []).append((int(f[1]), int(f[2]), f[3]))
+    return {c: ([r[0] for r in sorted(v)], sorted(v)) for c, v in regions.items()}
+
+
+def genome_cpg_metrics(meth, s, controls, imprinted):
+    """Genome-wide CpG metrics plus per-gene counts at imprinted promoters."""
     path = meth / f"{s}_CpG.bedGraph.gz"
     if not path.exists():
         path = meth / f"{s}_CpG.bedGraph"
     if not path.exists():
-        return {}
+        return {}, {}
     m = u = n = n5 = n10 = 0
+    genes = {}                                   # gene -> [meth, unmeth]
     opener = gzip.open if path.suffix == ".gz" else open
     with opener(path, "rt") as fh:
         for line in fh:
@@ -133,13 +151,28 @@ def genome_cpg_metrics(meth, s, controls):
             d = a + b
             m += a; u += b; n += 1
             n5 += d >= 5; n10 += d >= 10
-    return {
+            reg = imprinted.get(f[0])
+            if reg:
+                pos = int(f[1])
+                i = bisect.bisect_right(reg[0], pos) - 1
+                # regions may overlap (several TSSs per gene): walk back over candidates
+                while i >= 0 and pos - reg[1][i][0] < 5000:
+                    st, en, g = reg[1][i]
+                    if st <= pos < en:
+                        c = genes.setdefault(g, [0, 0]); c[0] += a; c[1] += b
+                        break
+                    i -= 1
+    per_gene = {g: (100 * c[0] / sum(c), sum(c)) for g, c in genes.items() if sum(c) >= MIN_IMPRINT_CALLS}
+    out = {
         "genome_pct_meth_CpG": 100 * m / (m + u) if m + u else None,
         "CpGs_covered": n,
         "CpGs_cov5": n5,
         "CpGs_cov10": n10,
         "mean_CpG_depth": (m + u) / n if n else None,
+        "imprinted_pct_meth": statistics.median(v[0] for v in per_gene.values()) if per_gene else None,
+        "imprinted_genes_used": len(per_gene),
     }
+    return out, per_gene
 
 
 def mbias_suggestion(mb, s):
@@ -164,7 +197,10 @@ def main():
     controls |= {"phage_lambda", "plasmid_puc19c", "phage_T4", "phage_Xp12"}
     thr = {k: float(cfg[k]) for k in ("MAX_LAMBDA_CPG_METH", "MIN_PUC19_CPG_METH",
                                      "MIN_MAPPING_RATE", "MAX_DUP_RATE",
-                                     "MAX_CHH_METH", "MIN_CONTROL_CALLS")}
+                                     "MAX_CHH_METH", "MIN_CONTROL_CALLS",
+                                     "MIN_IMPRINTED_METH", "MAX_IMPRINTED_METH", "MIN_GLOBAL_METH")}
+    imprinted = load_regions(cfg.get("IMPRINTED_BED", ""))
+    imprint_tables = {}
 
     sheet = outdir / "samplesheet.tsv"
     samples = [l.split("\t")[0] for l in sheet.read_text().splitlines()[1:] if l.strip()]
@@ -172,7 +208,8 @@ def main():
             "gc_pct_trimmed", "pct_mapped", "pct_duplicates", "internal_conversion_pct",
             "genome_pct_meth_CHH", "CHH_calls", "conversion_efficiency_pct",
             "lambda_pct_meth_CpG", "lambda_pct_meth_nonCpG", "lambda_CpG_calls",
-            "puc19_pct_meth_CpG", "puc19_CpG_calls", "genome_pct_meth_CpG", "CpGs_covered",
+            "puc19_pct_meth_CpG", "puc19_CpG_calls", "genome_pct_meth_CpG", "imprinted_pct_meth",
+            "imprinted_genes_used", "CpGs_covered",
             "CpGs_cov5", "CpGs_cov10", "mean_CpG_depth", "flags", "mbias_suggestion"]
     rows = []
     for s in samples:
@@ -185,7 +222,9 @@ def main():
         r.update(bismark_metrics(d / "qc", s))
         r.update(control_metrics(d / "meth", s, unmeth_ctrl, meth_ctrl))
         r.update(internal_conv_metrics(d / "meth", s))
-        r.update(genome_cpg_metrics(d / "meth", s, controls))
+        gm, per_gene = genome_cpg_metrics(d / "meth", s, controls, imprinted)
+        r.update(gm)
+        imprint_tables[s] = per_gene
         r["mbias_suggestion"] = mbias_suggestion(d / "mbias", s)
 
         flags = []
@@ -208,6 +247,13 @@ def main():
                   "pUC19 CpG meth {:.1f}% (over-conversion / protection failure)")
         check("genome_pct_meth_CHH", lambda v: v > thr["MAX_CHH_METH"],
               "genomic CHH meth {:.2f}% (incomplete conversion)")
+        # Protection-step proxy when the methylated spike-in (pUC19) is absent: imprinted
+        # promoters are ~50 % methylated in every tissue, and failed 5mC protection lowers
+        # them along with global methylation.
+        check("imprinted_pct_meth", lambda v: not thr["MIN_IMPRINTED_METH"] <= v <= thr["MAX_IMPRINTED_METH"],
+              "imprinted promoters {:.0f}% methylated (expected ~50%)")
+        check("genome_pct_meth_CpG", lambda v: v < thr["MIN_GLOBAL_METH"],
+              "global CpG meth {:.1f}% (low: check 5mC protection)")
         check("pct_mapped", lambda v: v < thr["MIN_MAPPING_RATE"], "mapping {:.1f}%")
         check("pct_duplicates", lambda v: v > thr["MAX_DUP_RATE"], "duplicates {:.1f}%")
         r.setdefault("status", "WARN" if flags else "PASS")
@@ -226,12 +272,23 @@ def main():
             ("internal_conversion_pct", "conv% (CHH)"), ("lambda_pct_meth_CpG", "lambda CpG%"),
             ("lambda_CpG_calls", "lambda n"), ("puc19_pct_meth_CpG", "pUC19 CpG%"),
             ("puc19_CpG_calls", "pUC19 n"), ("genome_pct_meth_CpG", "genome CpG%"),
+            ("imprinted_pct_meth", "imprinted%"),
             ("mean_CpG_depth", "CpG depth"), ("CpGs_cov5", "CpGs>=5x"),
             ("CpGs_cov10", "CpGs>=10x")]
     table = [[h for _, h in show]] + [[fmt(r.get(k)) for k, _ in show] for r in rows]
     widths = [max(len(row[i]) for row in table) for i in range(len(show))]
     for row in table:
         print("  ".join(v.ljust(w) for v, w in zip(row, widths)))
+    if imprinted:
+        gene_names = sorted({g for t in imprint_tables.values() for g in t})
+        with open(outdir / "summary" / "imprinted_promoters.tsv", "w") as fh:
+            fh.write("gene\t" + "\t".join(f"{s}_meth\t{s}_calls" for s in samples) + "\n")
+            for g in gene_names:
+                vals = []
+                for s in samples:
+                    v = imprint_tables.get(s, {}).get(g)
+                    vals += [f"{v[0]:.1f}", str(v[1])] if v else ["NA", "0"]
+                fh.write(g + "\t" + "\t".join(vals) + "\n")
     for r in rows:
         if r["flags"]:
             print(f"  ! {r['sample']}: {r['flags']}")

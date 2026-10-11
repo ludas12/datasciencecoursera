@@ -76,6 +76,7 @@ Check `summary/qc_summary.txt` first:
 | `pct_mapped` | ≳ 70–80 % (bwa-meth) | adapter dimers, contamination, wrong genome |
 | `pct_duplicates` | low (depends on input / depth) | low library complexity / too little input DNA |
 | `genome_pct_meth_CpG` | ~70–80 % (mammalian somatic tissue) | global conversion problems |
+| `imprinted_pct_meth` | ~50 % (30–70 % accepted) | **5mC protection failure** (TET2 step) when there is no pUC19 spike-in. This is the median methylation of promoters with an imprinting DMR (SNRPN, KCNQ1OT1, PEG3, MEST, PEG10, NNAT, …; set in `IMPRINTED_GENES`), which are ~50 % methylated in every normal tissue. Per-gene values are in `summary/imprinted_promoters.tsv`. Genes need ≥ 20 calls, so at ~1× depth only a few genes contribute |
 | `CpGs_cov10` | as many as possible | sequencing depth |
 | M-bias plots | flat lines along the read | end-repair bias → trim more |
 

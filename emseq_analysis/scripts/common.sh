@@ -13,6 +13,12 @@ export EMSEQ_CONFIG
 : "${INTERNAL_CONV_REGION:=chr22}"   # region whose non-CpG (CHH) methylation estimates conversion
 : "${MAX_CHH_METH:=1.0}"             # % CHH methylation above which conversion is flagged
 : "${MIN_CONTROL_CALLS:=200}"        # spike-in CpG calls needed before judging lambda/pUC19
+# Protection-step proxy for libraries without the pUC19 spike-in (step 04):
+: "${MIN_IMPRINTED_METH:=30}"        # imprinted promoters are ~50 % methylated in all tissues
+: "${MAX_IMPRINTED_METH:=70}"
+: "${MIN_GLOBAL_METH:=60}"           # % global CpG methylation below which a sample is flagged
+# Promoters with a germline (imprinting) DMR, ~50 % methylated in normal tissues
+: "${IMPRINTED_GENES:=SNRPN KCNQ1OT1 PEG3 MEST PEG10 NNAT NAP1L5 FAM50B MKRN3 MAGEL2 NDN PEG13 MEG3 DIRAS3}"
 # Downstream analysis (steps 05/06)
 : "${DOWNSTREAM_ENV:=emseq_downstream}"   # conda env made by downstream/setup_downstream.sh
 : "${BIN_SIZE:=10000}"                    # genomic bin size for step 05
@@ -63,6 +69,7 @@ n_samples() { tail -n +2 "$SAMPLESHEET" | grep -c . ; }
 sample_row() { tail -n +2 "$SAMPLESHEET" | grep . | sed -n "${1}p"; }
 
 DOWN_DIR="$OUTDIR/downstream"
+REFSEQ_URL="https://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/ncbiRefSeqCurated.txt.gz"
 TOOLS_DIR="$OUTDIR/tools"
 ANNOT_DIR="$OUTDIR/annotation"
 : "${SAMPLE_INFO:=$PIPE_DIR/downstream/samples.tsv}"   # labels/types for steps 05-06
