@@ -51,6 +51,23 @@ def flagstat_metrics(qc, s):
     return out
 
 
+def markdup_metrics(qc, s):
+    """Optical (clustering) vs library (PCR) duplicates from samtools markdup -f stats."""
+    txt = read_text(qc / f"{s}.markdup.txt")
+    if read_text(qc / f"{s}.optical_distance.txt").strip() in ("", "0"):
+        return {}                    # optical duplicates were not measured for this sample
+    def val(label):
+        m = re.search(rf"^{label}:\s*(\d+)", txt, re.M)
+        return int(m.group(1)) if m else None
+    reads, total = val("READ"), val("DUPLICATE TOTAL")
+    opt_pair, opt_single = val("DUPLICATE PAIR OPTICAL"), val("DUPLICATE SINGLE OPTICAL")
+    if not reads or total is None or opt_pair is None:
+        return {}
+    optical = opt_pair + (opt_single or 0)
+    return {"pct_optical_dup": 100 * optical / reads,
+            "pct_pcr_dup": 100 * (total - optical) / reads}
+
+
 def bismark_metrics(qc, s):
     out = {}
     rep = "".join(read_text(p) for p in qc.glob(f"{s}_*E_report.txt"))
@@ -205,7 +222,8 @@ def main():
     sheet = outdir / "samplesheet.tsv"
     samples = [l.split("\t")[0] for l in sheet.read_text().splitlines()[1:] if l.strip()]
     cols = ["sample", "status", "raw_reads", "reads_after_trim", "pct_reads_kept", "pct_q30_raw",
-            "gc_pct_trimmed", "pct_mapped", "pct_duplicates", "internal_conversion_pct",
+            "gc_pct_trimmed", "pct_mapped", "pct_duplicates", "pct_optical_dup", "pct_pcr_dup",
+            "internal_conversion_pct",
             "genome_pct_meth_CHH", "CHH_calls", "conversion_efficiency_pct",
             "lambda_pct_meth_CpG", "lambda_pct_meth_nonCpG", "lambda_CpG_calls",
             "puc19_pct_meth_CpG", "puc19_CpG_calls", "genome_pct_meth_CpG", "imprinted_pct_meth",
@@ -219,6 +237,7 @@ def main():
             r["status"] = "INCOMPLETE"
         r.update(fastp_metrics(d / "qc", s))
         r.update(flagstat_metrics(d / "qc", s))
+        r.update(markdup_metrics(d / "qc", s))
         r.update(bismark_metrics(d / "qc", s))
         r.update(control_metrics(d / "meth", s, unmeth_ctrl, meth_ctrl))
         r.update(internal_conv_metrics(d / "meth", s))
@@ -255,7 +274,9 @@ def main():
         check("genome_pct_meth_CpG", lambda v: v < thr["MIN_GLOBAL_METH"],
               "global CpG meth {:.1f}% (low: check 5mC protection)")
         check("pct_mapped", lambda v: v < thr["MIN_MAPPING_RATE"], "mapping {:.1f}%")
-        check("pct_duplicates", lambda v: v > thr["MAX_DUP_RATE"], "duplicates {:.1f}%")
+        # judge library complexity on PCR duplicates when optical ones were counted separately
+        dup_key = "pct_pcr_dup" if r.get("pct_pcr_dup") is not None else "pct_duplicates"
+        check(dup_key, lambda v: v > thr["MAX_DUP_RATE"], "duplicates {:.1f}%")
         r.setdefault("status", "WARN" if flags else "PASS")
         r["flags"] = "; ".join(flags)
         rows.append(r)
@@ -268,7 +289,7 @@ def main():
             fh.write("\t".join(fmt(r.get(c)) for c in cols) + "\n")
 
     show = [("sample", "sample"), ("status", "status"), ("raw_reads", "raw reads"),
-            ("pct_mapped", "%map"), ("pct_duplicates", "%dup"),
+            ("pct_mapped", "%map"), ("pct_duplicates", "%dup"), ("pct_optical_dup", "%optical"),
             ("internal_conversion_pct", "conv% (CHH)"), ("lambda_pct_meth_CpG", "lambda CpG%"),
             ("lambda_CpG_calls", "lambda n"), ("puc19_pct_meth_CpG", "pUC19 CpG%"),
             ("puc19_CpG_calls", "pUC19 n"), ("genome_pct_meth_CpG", "genome CpG%"),

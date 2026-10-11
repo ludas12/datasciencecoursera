@@ -13,6 +13,9 @@ export EMSEQ_CONFIG
 : "${INTERNAL_CONV_REGION:=chr22}"   # region whose non-CpG (CHH) methylation estimates conversion
 : "${MAX_CHH_METH:=1.0}"             # % CHH methylation above which conversion is flagged
 : "${MIN_CONTROL_CALLS:=200}"        # spike-in CpG calls needed before judging lambda/pUC19
+# Pixel distance for optical/clustering duplicates (samtools markdup -d): 2500 for
+# patterned flow cells (NovaSeq, NextSeq 2000, NovaSeq X), 100 for older ones, 0 = off.
+: "${OPTICAL_DUP_DISTANCE:=2500}"
 # Protection-step proxy for libraries without the pUC19 spike-in (step 04):
 : "${MIN_IMPRINTED_METH:=30}"        # imprinted promoters are ~50 % methylated in all tissues
 : "${MAX_IMPRINTED_METH:=70}"

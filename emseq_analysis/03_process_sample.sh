@@ -68,7 +68,9 @@ if ! is_done "$S" align; then
           | samtools fixmate -m -@ 2 - - \
           | samtools sort -@ "$THREADS" -m "$sort_mem" -T "$tmp/sort" -o "$tmp/$sample.sorted.bam" -
         log "marking duplicates"
-        samtools markdup -@ "$THREADS" -T "$tmp/markdup" -f "$S/qc/$sample.markdup.txt" \
+        optical=(); [[ "$OPTICAL_DUP_DISTANCE" -gt 0 ]] && optical=(-d "$OPTICAL_DUP_DISTANCE")
+        echo "$OPTICAL_DUP_DISTANCE" > "$S/qc/$sample.optical_distance.txt"   # 0 = not measured
+        samtools markdup -@ "$THREADS" "${optical[@]}" -T "$tmp/markdup" -f "$S/qc/$sample.markdup.txt" \
             "$tmp/$sample.sorted.bam" "$FINAL_BAM"
         ;;
     bismark)
