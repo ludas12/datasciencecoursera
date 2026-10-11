@@ -5,6 +5,7 @@
 # 07 (SeqMonk export) needs no setup and also runs at the end of step 04.
 # 08 (sample identity check) needs bcftools in the downstream env.
 # 09 (fragmentomics) uses the same BAMs; no extra sequencing.
+# 11 (BAL vs plasma checks) needs steps 04 and 05 done.
 # shellcheck disable=SC1091
 source "${PIPE_DIR:-$(dirname "$0")}/scripts/common.sh"
 mkdir -p "$LOG_DIR"
@@ -24,7 +25,8 @@ for step in "${steps[@]}"; do
         07) script=07_export_seqmonk.sh; name=emseq_seqmonk ;;
         08) script=08_identity_check.sh; name=emseq_identity ;;
         09) script=09_fragmentomics.sh; name=emseq_fragments ;;
-        *) die "unknown step '$step' (use 05, 06, 07, 08 and/or 09)" ;;
+        11) script=11_compartment_check.sh; name=emseq_compartment ;;
+        *) die "unknown step '$step' (use 05, 06, 07, 08, 09 and/or 11)" ;;
     esac
     job=$(sbatch "${common[@]}" --job-name="$name" --output="$LOG_DIR/${script%.sh}_%j.log" "$script")
     echo "$step $script: job $job"

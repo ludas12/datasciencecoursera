@@ -192,6 +192,19 @@ This needs `bcftools` in the downstream env. `downstream/setup_downstream.sh` in
 
 Libraries aligned earlier, such as the pilot, were clipped. Step 09 restores their ends from the `CLIP_5P` settings, so their sizes are correct as well.
 
+## BAL vs plasma checks (step 11)
+
+`bash run_downstream.sh 11` (or `bash 11_compartment_check.sh`) needs steps 04 and 05. Pairs are one plasma and one BAL library with the same `subject` and `timepoint` in `downstream/samples.tsv`. Results go to `OUTDIR/downstream/compartment/`; `compartment_summary.txt` has the headline numbers.
+
+| Output | Content |
+|---|---|
+| `imprinted_genes.tsv` | Per imprinted promoter and library: methylation, calls, CpGs covered, share of calls on the top 3 CpGs |
+| `imprinted_pairs.tsv`, `imprinted_pairs.png` | Per pair and gene: BAL − plasma difference, 95 % CI from resampling CpGs, and whether leaving out any single CpG flips the sign. Shows whether a difference rests on a few positions |
+| `imprinted_pairs_summary.tsv` | Per pair (each timepoint separately): genes lower/higher in BAL, two-sided sign test, genes whose CI excludes 0 |
+| `bal_vs_plasma_fit.tsv`, `bal_vs_plasma_strata.tsv`, `bal_vs_plasma.png` | BAL against plasma in 10 kb bins, CpG islands and promoters. Regions are grouped by the reference libraries' methylation (independent of both samples, so the grouping doesn't bias the comparison), and calls are pooled per group. Uniform 5mC loss in BAL predicts intercept ≈ 0 and the same BAL/plasma ratio in highly (reference ≥ 0.7) and moderately (0.2–0.7) methylated regions. A cell-composition difference gives a non-zero intercept or ratios that differ |
+
+The imprinted regions are RefSeq promoters (TSS ± 1 kb) of the genes in `IMPRINTED_GENES`, not curated imprinting-control coordinates. With one library per compartment, all of this describes one patient's samples, not BAL versus plasma in general.
+
 ## Handover for independent QC review (step 10)
 
 Run `bash 10_make_handover.sh` on the login node. It needs no re-alignment and builds `OUTDIR/handover_<date>/` plus a `.tar.gz`:
