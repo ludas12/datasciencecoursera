@@ -29,6 +29,8 @@ T1="$S/trim/${sample}_R1.trimmed.fq.gz"
 T2="$S/trim/${sample}_R2.trimmed.fq.gz"
 
 # ---- 1. adapter/quality trimming ---------------------------------------------
+# Trimmed reads are deleted after alignment, so re-aligning needs them re-made.
+if ! is_done "$S" align && [[ ! -s "$T1" ]]; then rm -f "$(done_marker "$S" trim)"; fi
 if ! is_done "$S" trim && ! is_done "$S" align; then
     # Merge lanes if a sample has several files per read.
     in1="${r1_files[0]}"; in2="${r2_files[0]:-}"
@@ -55,6 +57,7 @@ fi
 
 # ---- 2. alignment + duplicate marking/removal --------------------------------
 if ! is_done "$S" align; then
+    [[ -s "$T1" ]] || die "trimmed reads $T1 missing; re-run with REDO=trim,align"
     reads=("$T1"); $paired && reads+=("$T2")
     tmp="$S/align/tmp"; mkdir -p "$tmp"
     mem_gb="${SAMPLE_MEM//[!0-9]/}"
