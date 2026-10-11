@@ -115,7 +115,16 @@ At ~1–2× CpG depth, single CpGs are too noisy, so CpG calls are summed over l
 - distributions
 - one table and scatter plot per comparison, with the difference (`group_b − group_a`), a two-proportion z-test and BH FDR
 
-With one sample per group, the p-values only measure read-sampling noise, not biological variation. Use them to rank regions, not as formal statistical evidence.
+Comparisons only use regions that pass three filters:
+- **Coverage:** at least `MIN_COMPARE_CALLS` (50) calls in both samples.
+- **Blacklist:** no overlap with the ENCODE hg38 blacklist (problem and repeat regions).
+- **No extreme coverage:** fewer than `MAX_COV_FOLD` (10) × the median calls, since higher counts typically mean collapsed repeats.
+
+CpG calls are not independent: one read covers several CpGs, especially in CpG islands. The z-statistics are therefore corrected for over-dispersion. The factor φ is estimated from each comparison and reported in `*.comparisons_summary.tsv`, together with how many regions each filter excluded.
+
+A genome-wide shift between two samples also inflates φ. Read that kind of shift from `mean_delta` and the distributions; the test then picks out regions that differ beyond the typical difference.
+
+With one sample per group, the p-values still only measure technical noise, not biological variation. Use them to rank regions, not as formal statistical evidence.
 
 ### 06: tissue / cell-of-origin (`OUTDIR/downstream/tissue_of_origin/`)
 This step uses [UXM](https://github.com/nloyfer/UXM_deconv) with the human methylation atlas of [Loyfer et al. 2023, *Nature*](https://www.nature.com/articles/s41586-022-05580-6), which has 39 cell types and the `U250` marker set by default. It estimates what fraction of the DNA comes from each cell type, for example lung alveolar and bronchial epithelium, neutrophils, monocytes/macrophages, lymphocytes, endothelium and liver.

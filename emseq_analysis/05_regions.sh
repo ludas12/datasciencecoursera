@@ -39,6 +39,19 @@ rtypes=()
 for r in bins cpg_islands promoters; do [[ -s "$B/$r.bed" ]] && rtypes+=("$r"); done
 log "region sets: ${rtypes[*]}"
 
+# ENCODE blacklist (problematic/repeat regions): regions overlapping it are left
+# out of the comparisons. Downloaded by setup_downstream.sh; retried here.
+BLACKLIST="$ANNOT_DIR/hg38-blacklist.v2.bed.gz"
+[[ -s "$BLACKLIST" ]] || curl -fsSL "$BLACKLIST_URL" -o "$BLACKLIST" 2>/dev/null || rm -f "$BLACKLIST"
+for r in "${rtypes[@]}"; do
+    if [[ -s "$BLACKLIST" ]]; then
+        bedtools intersect -u -a "$B/$r.bed" -b "$BLACKLIST" > "$B/$r.blacklisted.bed"
+    else
+        : > "$B/$r.blacklisted.bed"
+    fi
+done
+[[ -s "$BLACKLIST" ]] || log "WARNING: no ENCODE blacklist ($BLACKLIST); run downstream/setup_downstream.sh on the login node"
+
 # ---- per-sample counts per region ------------------------------------------------
 while IFS=$'\t' read -r sample label _ _ include; do
     [[ "$sample" == sample || "$include" != yes ]] && continue
@@ -63,5 +76,6 @@ done < "$SAMPLE_INFO"
 python3 "$PIPE_DIR/downstream/region_analysis.py" \
     --regions-dir "$R" --sample-info "$SAMPLE_INFO" \
     --comparisons "$COMPARISONS" \
-    --min-calls "$MIN_REGION_CALLS" --out "$R/results"
+    --min-calls "$MIN_REGION_CALLS" --min-compare-calls "$MIN_COMPARE_CALLS" \
+    --max-cov-fold "$MAX_COV_FOLD" --flag-dir "$B" --out "$R/results"
 log "region analysis written to $R/results"

@@ -11,11 +11,20 @@ n_meth n_unmeth) this writes to OUT/:
   <set>.pca.png              PCA of the most variable regions
   <set>.distribution.png     methylation distribution per sample
   <set>.<comparison>.tsv.gz  per-region difference (group_b - group_a) with a
-                             two-proportion z-test on read counts + BH FDR
+                             two-proportion z-test on CpG-call counts, corrected
+                             for over-dispersion, + BH FDR
   <set>.<comparison>.png     scatter of group_a vs group_b
 
-With one sample per group the p-values only reflect read-sampling noise, not
-biological variability: use them to rank regions, not as formal evidence.
+Comparisons only use regions with >= --min-compare-calls calls in both samples,
+outside the ENCODE blacklist (if given) and without extreme coverage (more than
+--max-cov-fold x the median, typical of collapsed repeats).
+
+CpG calls are not independent: one read covers several CpGs, more so in CpG
+islands. The z-statistics are therefore divided by sqrt(phi), where phi is the
+over-dispersion estimated from the comparison itself (median z^2 / 0.455, the
+median of a chi-square with 1 df; phi >= 1). With one sample per group the
+p-values still only reflect technical noise, not biological variability: use
+them to rank regions, not as formal evidence.
 """
 import argparse
 import gzip
@@ -32,6 +41,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 N_VARIABLE = 5000          # regions used for PCA
 MIN_DELTA = 0.2            # |difference| reported as "large"
 FDR = 0.05
+CHI2_1_MEDIAN = 0.4549     # median of a chi-square distribution with 1 df
 
 
 def load_set(set_dir, labels):
@@ -91,7 +101,16 @@ def heatmap(mat, labels, title, path):
     plt.close(fig)
 
 
-def analyse_set(name, keys, meth, calls, info, comparisons, min_calls, out):
+def load_flagged(path):
+    """Regions (chr, start, end) listed in a BED file, e.g. blacklist overlaps."""
+    if not path or not Path(path).exists() or Path(path).stat().st_size == 0:
+        return set()
+    df = pd.read_csv(path, sep="\t", header=None, usecols=[0, 1, 2], dtype={0: str})
+    return set(zip(df[0], df[1], df[2]))
+
+
+def analyse_set(name, keys, meth, calls, info, comparisons, min_calls, out,
+                min_compare_calls=50, max_cov_fold=10.0, flagged=frozenset()):
     labels = list(meth.columns)
     ok = (calls >= min_calls).all(axis=1).to_numpy()
     print(f"[{name}] {len(keys):,} regions, {ok.sum():,} with >= {min_calls} calls in all "
@@ -158,12 +177,19 @@ def analyse_set(name, keys, meth, calls, info, comparisons, min_calls, out):
         if a not in labels or b not in labels:
             print(f"[{name}] comparison {c['name']}: {a} or {b} missing; skipped")
             continue
-        keep = (calls[a] >= min_calls) & (calls[b] >= min_calls)
+        black = np.array([k in flagged for k in zip(keys["chr"], keys["start"], keys["end"])])
+        covered = ((calls[a] >= min_compare_calls) & (calls[b] >= min_compare_calls)).to_numpy()
+        extreme = ((calls[a] > max_cov_fold * calls[a][covered].median()) |
+                   (calls[b] > max_cov_fold * calls[b][covered].median())).to_numpy()
+        keep = covered & ~black & ~extreme
         na, nb = calls[a][keep].to_numpy(), calls[b][keep].to_numpy()
         ma, mb = meth[a][keep].to_numpy() * na, meth[b][keep].to_numpy() * nb
-        z, p = two_prop_z(ma, na, mb, nb)
+        z, _ = two_prop_z(ma, na, mb, nb)
+        phi = max(1.0, float(np.median(z ** 2)) / CHI2_1_MEDIAN) if len(z) else 1.0
+        z = z / math.sqrt(phi)
+        p = np.array([math.erfc(abs(x) / math.sqrt(2)) for x in z])
         q = bh(p)
-        res = keys[keep.to_numpy()].copy()
+        res = keys[keep].copy()
         res[f"{a}_meth"], res[f"{b}_meth"] = (ma / na).round(4), (mb / nb).round(4)
         res[f"{a}_calls"], res[f"{b}_calls"] = na.astype(int), nb.astype(int)
         res["delta"] = (mb / nb - ma / na).round(4)
@@ -173,6 +199,10 @@ def analyse_set(name, keys, meth, calls, info, comparisons, min_calls, out):
             res.to_csv(fh, sep="\t", index=False)
         big = (res["fdr"] < FDR) & (res["delta"].abs() >= MIN_DELTA)
         rows.append({"comparison": c["name"], "a": a, "b": b, "regions_tested": len(res),
+                     "excluded_low_cov": int((~covered).sum()),
+                     "excluded_blacklist": int((covered & black).sum()),
+                     "excluded_extreme_cov": int((covered & ~black & extreme).sum()),
+                     "overdispersion_phi": phi,
                      "pearson_r": np.corrcoef(ma / na, mb / nb)[0, 1],
                      "mean_delta": res["delta"].mean(),
                      f"hyper_in_b(fdr<{FDR},delta>={MIN_DELTA})": int((big & (res["delta"] > 0)).sum()),
@@ -200,7 +230,14 @@ def main():
     ap.add_argument("--regions-dir", required=True, type=Path)
     ap.add_argument("--sample-info", required=True, type=Path)
     ap.add_argument("--comparisons", type=Path)
-    ap.add_argument("--min-calls", type=int, default=10)
+    ap.add_argument("--min-calls", type=int, default=10,
+                    help="calls per region in every sample for summaries/PCA")
+    ap.add_argument("--min-compare-calls", type=int, default=50,
+                    help="calls per region in both samples of a comparison")
+    ap.add_argument("--max-cov-fold", type=float, default=10.0,
+                    help="exclude regions above this multiple of the median calls")
+    ap.add_argument("--flag-dir", type=Path,
+                    help="directory with <set>.blacklisted.bed (regions to exclude)")
     ap.add_argument("--out", required=True, type=Path)
     args = ap.parse_args()
 
@@ -216,7 +253,9 @@ def main():
         keys, meth, calls = load_set(set_dir, labels)
         if keys is None:
             continue
-        analyse_set(set_dir.name, keys, meth, calls, info, comparisons, args.min_calls, args.out)
+        flagged = load_flagged(args.flag_dir / f"{set_dir.name}.blacklisted.bed") if args.flag_dir else set()
+        analyse_set(set_dir.name, keys, meth, calls, info, comparisons, args.min_calls, args.out,
+                    args.min_compare_calls, args.max_cov_fold, flagged)
 
 
 if __name__ == "__main__":

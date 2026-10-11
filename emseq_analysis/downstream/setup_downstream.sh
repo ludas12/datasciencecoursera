@@ -47,4 +47,7 @@ for f in cpgIslandExt.txt.gz ncbiRefSeqCurated.txt.gz; do
     [[ -s "$ANNOT_DIR/$f" ]] || curl -fsSL "$UCSC/$f" -o "$ANNOT_DIR/$f" || die "download of $f failed"
 done
 
+[[ -s "$ANNOT_DIR/hg38-blacklist.v2.bed.gz" ]] || curl -fsSL "$BLACKLIST_URL" -o "$ANNOT_DIR/hg38-blacklist.v2.bed.gz" \
+    || die "download of the ENCODE blacklist failed"
+
 log "downstream setup done. Next: bash run_downstream.sh"
