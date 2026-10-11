@@ -20,4 +20,5 @@ if command -v multiqc >/dev/null 2>&1; then
 else
     log "multiqc not in env; skipping (pip/conda install multiqc to get the HTML report)"
 fi
+bash "$PIPE_DIR/07_export_seqmonk.sh" || log "WARNING: SeqMonk export failed (run 07_export_seqmonk.sh to retry)"
 log "summary written to $OUTDIR/summary"

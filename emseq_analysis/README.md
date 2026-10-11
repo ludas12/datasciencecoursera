@@ -128,3 +128,17 @@ Outputs:
 In a lung transplant recipient, plasma cfDNA from lung epithelium is expected to come largely from the donor lung. This method cannot tell donor DNA from recipient DNA; that needs genotype-based donor-derived cfDNA assays.
 
 UXM and wgbstools are under the authors' academic/research licences. They are downloaded by the setup script, not redistributed here. If you use them, cite Loyfer et al. 2023.
+
+## SeqMonk export (step 07)
+
+`07_export_seqmonk.sh` writes `OUTDIR/seqmonk/<label>.cov.gz`, one per sample. These are Bismark coverage files (1-based: chr, start, end, % methylated, methylated count, unmethylated count) for chromosomes 1–22, X, Y and M. Labels come from `downstream/samples.tsv`; any sample not listed there keeps its sample name.
+
+The export runs automatically at the end of step 04. To run it on its own, use `bash 07_export_seqmonk.sh` or `bash run_downstream.sh 07`. Files that are already up to date are skipped.
+
+In SeqMonk:
+1. File → New Project → Homo sapiens GRCh38.
+2. File → Import Data → **Bismark (cov)**.
+3. Make probes: running windows, or a fixed number of CpGs per probe, suit low coverage.
+4. Data → Quantitation → **Bisulphite methylation over features**, with a minimum call count per probe.
+
+Give SeqMonk ≥ 8 GB of memory (Edit → Preferences).
