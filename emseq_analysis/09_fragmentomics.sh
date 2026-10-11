@@ -4,7 +4,7 @@
 #   nucleosome footprints at TSSs of marker gene sets, 4-mer end motifs.
 # True fragment ends are restored for libraries whose reads were clipped before
 # alignment (read from samples/<s>/qc/<s>.clip5p.txt, else CLIP_5P_R1/R2).
-# Run with run_downstream.sh 09, or:  bash 09_fragmentomics.sh
+# Run with run_downstream.sh 09, or:  bash 09_fragmentomics.sh   (FORCE=1 to recompute)
 # shellcheck disable=SC1091
 source "${PIPE_DIR:-$(dirname "$0")}/scripts/common.sh"
 activate_env "$DOWNSTREAM_ENV"
@@ -20,7 +20,7 @@ while IFS=$'\t' read -r sample label _ _ include _; do
     bam="$OUTDIR/samples/$sample/align/$sample.final.bam"
     [[ -s "$bam" ]] || { log "WARNING: no BAM for $sample; skipping"; continue; }
     out="$F/per_library/$label.frag.npz"
-    [[ "$out" -nt "$bam" ]] && continue
+    [[ "$out" -nt "$bam" && "${FORCE:-0}" != 1 ]] && continue
     read -r c1 c2 < <(cat "$OUTDIR/samples/$sample/qc/$sample.clip5p.txt" 2>/dev/null || echo "$CLIP_5P_R1 $CLIP_5P_R2")
     printf '%s\t%s\t%s\t%s\t%s\n' "$bam" "$label" "$c1" "$c2" "$out" >> "$jobs"
 done < "$SAMPLE_INFO"

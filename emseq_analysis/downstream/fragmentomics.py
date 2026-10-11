@@ -2,7 +2,8 @@
 """cfDNA fragmentomics from paired-end EM-seq alignments.
 
 extract   one library -> OUT/<label>.frag.npz
-          fragments = properly paired, primary, non-duplicate pairs with MAPQ >= 30.
+          fragments = primary, non-duplicate pairs, both mates MAPQ >= 30, same chromosome,
+          FR orientation, <= 1,000 bp (the aligner's proper-pair flag is not required).
           True fragment ends are restored when reads were clipped before alignment
           (--clip R1 R2) and from soft clips (own CIGAR and the mate's MC tag).
           Collects: size histogram; short (100-150 bp) / long (151-220 bp) counts per
@@ -120,14 +121,21 @@ def extract(a):
     motifs = np.zeros(len(KMERS), dtype=np.int64)
     clip = {64: a.clip[0], 128: a.clip[1]}            # read1 / read2 flag bits
 
-    cmd = ["samtools", "view", "-f", "0x2", "-F", "0xF0C", "-q", str(a.mapq), a.bam]
+    # Not "-f 0x2": bwa-meth sets the proper-pair flag from each library's own insert-size
+    # distribution, which can drop di-nucleosomal fragments in sharply peaked plasma
+    # libraries. Instead: both mates mapped to the same chromosome in FR orientation,
+    # fragment <= MAX_LEN, MAPQ >= mapq for both mates (MQ tag from samtools fixmate).
+    cmd = ["samtools", "view", "-f", "0x1", "-F", "0xF0C", "-q", str(a.mapq), a.bam]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True, bufsize=1 << 20)
     cur, seq, tss_pos, tss_list = None, "", [], []
     n_frag = 0
     for line in proc.stdout:
         f = line.split("\t", 12)
         tlen = int(f[8])
-        if tlen <= 0:                       # one record per pair: the leftmost mate
+        if tlen <= 0 or f[6] != "=":        # one record per pair (the leftmost mate), same chrom
+            continue
+        flag0 = int(f[1])
+        if flag0 & 0x10 or not flag0 & 0x20:  # leftmost mate forward, its mate reverse (FR)
             continue
         chrom = f[2]
         if chrom != cur:
@@ -142,6 +150,9 @@ def extract(a):
         mate_clip = clip[128] if flag & 64 else clip[64]
         tags = "\t".join(f[11:])
         mc = next((t[5:] for t in tags.split("\t") if t.startswith("MC:Z:")), "")
+        mq = next((t[5:] for t in tags.split("\t") if t.startswith("MQ:i:")), "")
+        if mq and int(mq) < a.mapq:
+            continue
         start = int(f[3]) - 1 - softclip(f[5], "L") - this_clip          # 0-based
         end = int(f[3]) - 1 + tlen + softclip(mc, "R") + mate_clip      # exclusive
         length = end - start
