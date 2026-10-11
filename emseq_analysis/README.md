@@ -191,3 +191,18 @@ This needs `bcftools` in the downstream env. `downstream/setup_downstream.sh` in
 **Fragment ends.** Fragmentomics needs the true fragment ends. Since this change, `KEEP_FRAGMENT_ENDS=true` (the default) stops fastp from clipping the 5′ read ends. Instead, MethylDackel ignores those `CLIP_5P_R1/R2` bases at methylation calling (`--nOT/--nOB`), so methylation results are equivalent. Each library records what was clipped before alignment in `qc/<sample>.clip5p.txt`.
 
 Libraries aligned earlier, such as the pilot, were clipped. Step 09 restores their ends from the `CLIP_5P` settings, so their sizes are correct as well.
+
+## Handover for independent QC review (step 10)
+
+Run `bash 10_make_handover.sh` on the login node. It needs no re-alignment and builds `OUTDIR/handover_<date>/` plus a `.tar.gz`:
+
+| Folder | Contents |
+|---|---|
+| `A_provenance/` | Pipeline code at its git commit, config used, conda env exports, tool versions, reference contents (lambda, pUC19, phiX, chrEBV, chrM present?), sample sheets |
+| `C_alignment/` | `alignment_qc.csv` (one row per library: read pairs, mapping, duplicate/optical/PCR %, unique pairs, approximate coverage, median insert raw and clip-corrected, % chrM, % unmapped), MultiQC, per-library samtools/fastp reports, Preseq and optical-duplicate outputs |
+| `D_conversion/` | `spikein_controls.csv`, `conversion_proxies.csv` (global mCpG, CHH on chr22, chrM mCpG, imprinted promoters, CpG coverage counts), M-bias files |
+| `E_identity/` | Step 08 outputs |
+| `F_compact_data/` | 1 Mb binned methylation matrix, chr20 per-CpG bedGraphs, fragment-length tables, step 09 outputs |
+| `G_downstream/` | Tissue-of-origin and region results with figures |
+
+`MANIFEST.txt` lists every file.
