@@ -53,7 +53,7 @@ done
 [[ -s "$BLACKLIST" ]] || log "WARNING: no ENCODE blacklist ($BLACKLIST); run downstream/setup_downstream.sh on the login node"
 
 # ---- per-sample counts per region ------------------------------------------------
-while IFS=$'\t' read -r sample label _ _ include; do
+while IFS=$'\t' read -r sample label _ _ include _; do
     [[ "$sample" == sample || "$include" != yes ]] && continue
     bg="$OUTDIR/samples/$sample/meth/${sample}_CpG.bedGraph.gz"
     [[ -s "$bg" ]] || { log "WARNING: no CpG calls for $sample; skipping"; continue; }

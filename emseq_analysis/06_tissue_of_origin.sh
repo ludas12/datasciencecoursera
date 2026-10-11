@@ -29,7 +29,7 @@ fi
 # ---- 2. BAM -> pat (only reads overlapping atlas markers, so this is quick) ---
 tail -n +2 "$ATLAS" | cut -f1-3 | LC_ALL=C sort -k1,1 -k2,2n -u > "$T/atlas_markers.bed"
 pats=()
-while IFS=$'\t' read -r sample label _ _ include; do
+while IFS=$'\t' read -r sample label _ _ include _; do
     [[ "$sample" == sample || "$include" != yes ]] && continue
     bam="$OUTDIR/samples/$sample/align/$sample.final.bam"
     [[ -s "$bam" ]] || { log "WARNING: no BAM for $sample; skipping"; continue; }

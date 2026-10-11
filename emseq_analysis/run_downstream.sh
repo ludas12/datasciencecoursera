@@ -3,6 +3,7 @@
 # downstream/setup_downstream.sh):  bash run_downstream.sh [05] [06] [07]
 # With no arguments 05 and 06 are submitted; they run independently.
 # 07 (SeqMonk export) needs no setup and also runs at the end of step 04.
+# 08 (sample identity check) needs bcftools in the downstream env.
 # shellcheck disable=SC1091
 source "${PIPE_DIR:-$(dirname "$0")}/scripts/common.sh"
 mkdir -p "$LOG_DIR"
@@ -20,7 +21,8 @@ for step in "${steps[@]}"; do
         05) script=05_regions.sh; name=emseq_regions ;;
         06) script=06_tissue_of_origin.sh; name=emseq_uxm ;;
         07) script=07_export_seqmonk.sh; name=emseq_seqmonk ;;
-        *) die "unknown step '$step' (use 05, 06 and/or 07)" ;;
+        08) script=08_identity_check.sh; name=emseq_identity ;;
+        *) die "unknown step '$step' (use 05, 06, 07 and/or 08)" ;;
     esac
     job=$(sbatch "${common[@]}" --job-name="$name" --output="$LOG_DIR/${script%.sh}_%j.log" "$script")
     echo "$step $script: job $job"

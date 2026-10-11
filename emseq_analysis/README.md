@@ -156,3 +156,23 @@ Give SeqMonk ≥ 8 GB of memory (Edit → Preferences).
 ## Capture panel draft (`panel/`)
 
 `panel/build_capture_panel.py` drafts a targeted methylation capture panel for lung-derived DNA from the Loyfer et al. 2023 atlas: about 2,200 markers in about 0.9 Mb. See `panel/README.md`.
+
+## Sample identity check (step 08)
+
+`bash run_downstream.sh 08` (or `bash 08_identity_check.sh`) checks that every library belongs to the person it is labelled as. It catches swapped or mislabelled libraries, for example from mirrored i7/i5 indexes entered the wrong way round. Libraries from the same person must have the same `subject` in `downstream/samples.tsv`.
+
+- **Sex:** chrX and chrY read density relative to autosomes (MAPQ ≥ 30).
+  - Female: `rel_X` ≈ 1 and `rel_Y` ≈ 0. Male: `rel_X` ≈ 0.5 and `rel_Y` clearly > 0.
+  - A small chrY signal in a female recipient can be DNA from a male donor lung.
+- **Genotype relatedness between every pair of libraries,** on `IDENTITY_REGIONS` (default chr20–22).
+  - Only reference A/T positions are used. EM-seq conversion changes C/G only, so any non-reference base seen there is a real allele.
+  - Sites must be common variants among the other libraries.
+  - Scale: about 0 for unrelated people (up to ~0.6 when there are few libraries), about 0.5 for first-degree relatives, and about 1 for the same person. Pairs above 0.8 count as the same person.
+- **Flags:**
+  - A library that doesn't match its own subject.
+  - A library that matches a different subject.
+  - Sex that differs within a subject.
+
+Outputs are in `OUTDIR/summary/identity/`: `identity_check.tsv`, `identity_matrix.tsv` and `.png`.
+
+This needs `bcftools` in the downstream env. `downstream/setup_downstream.sh` installs it, or install it with `conda install -n emseq_downstream -c bioconda bcftools`. I tested the step on simulated EM-seq libraries at ~1× and ~7× depth, including a deliberately swapped label.

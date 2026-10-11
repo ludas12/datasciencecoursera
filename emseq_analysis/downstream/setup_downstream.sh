@@ -15,9 +15,12 @@ if conda env list | awk '{print $1}' | grep -qx "$DOWNSTREAM_ENV"; then
 else
     log "creating conda env $DOWNSTREAM_ENV (a few minutes)"
     conda create -y -n "$DOWNSTREAM_ENV" -c conda-forge -c bioconda \
-        "python=3.11" pandas numpy scipy matplotlib samtools htslib bedtools cxx-compiler
+        "python=3.11" pandas numpy scipy matplotlib samtools htslib bedtools bcftools preseq cxx-compiler
 fi
 activate_env "$DOWNSTREAM_ENV"
+for tool in bcftools preseq; do    # added after the first release
+    command -v "$tool" >/dev/null || conda install -y -n "$DOWNSTREAM_ENV" -c conda-forge -c bioconda "$tool"
+done
 
 # ---- 2. wgbstools + UXM ------------------------------------------------------------
 mkdir -p "$TOOLS_DIR"

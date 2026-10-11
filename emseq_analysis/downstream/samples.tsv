@@ -1,7 +1,7 @@
-sample	label	type	timepoint	include
-RL6744_2025_11_20_Human_EMseq	Human_ref	reference	NA	yes
-RL6745_2025_11_20_Lung_EMseq	Lung_ref	reference	NA	yes
-RL6746_2025_11_20_LR_CF_0020A_PL_EMseq	CF0020_A_PL	plasma	A	yes
-RL6747_2025_11_20_LR_CF_0020A_BAL_EMseq	CF0020_A_BAL	BAL	A	yes
-RL6748_2025_11_20_LR_CF_0020D_PL_EMseq	CF0020_D_PL	plasma	D	yes
-RL6749_2025_11_20_LR_CF_0020D_BAL_EMseq	CF0020_D_BAL	BAL	D	yes
+sample	label	type	timepoint	include	subject
+RL6744_2025_11_20_Human_EMseq	Human_ref	reference	NA	yes	REF_HUMAN
+RL6745_2025_11_20_Lung_EMseq	Lung_ref	reference	NA	yes	REF_LUNG
+RL6746_2025_11_20_LR_CF_0020A_PL_EMseq	CF0020_A_PL	plasma	A	yes	CF0020
+RL6747_2025_11_20_LR_CF_0020A_BAL_EMseq	CF0020_A_BAL	BAL	A	yes	CF0020
+RL6748_2025_11_20_LR_CF_0020D_PL_EMseq	CF0020_D_PL	plasma	D	yes	CF0020
+RL6749_2025_11_20_LR_CF_0020D_BAL_EMseq	CF0020_D_BAL	BAL	D	yes	CF0020
