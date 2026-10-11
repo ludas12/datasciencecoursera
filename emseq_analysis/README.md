@@ -151,3 +151,7 @@ In SeqMonk:
 4. Data → Quantitation → **Bisulphite methylation over features**, with a minimum call count per probe.
 
 Give SeqMonk ≥ 8 GB of memory (Edit → Preferences).
+
+## Capture panel draft (`panel/`)
+
+`panel/build_capture_panel.py` drafts a targeted methylation capture panel for lung-derived DNA from the Loyfer et al. 2023 atlas: about 2,200 markers in about 0.9 Mb. See `panel/README.md`.
