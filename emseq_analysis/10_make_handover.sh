@@ -9,6 +9,8 @@
 source "${PIPE_DIR:-$(dirname "$0")}/scripts/common.sh"
 activate_env
 H="$OUTDIR/handover_$(date +%Y%m%d)"
+# The folder is generated entirely by this script: rebuild it from scratch on re-runs.
+rm -rf "$H" "$H.tar.gz"
 mkdir -p "$H"/{A_provenance,C_alignment,D_conversion/mbias,E_identity,F_compact_data,G_downstream,work}
 
 # ---- A. provenance --------------------------------------------------------------------
