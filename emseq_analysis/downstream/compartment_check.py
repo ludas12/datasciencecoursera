@@ -338,7 +338,10 @@ def size_split(size_dir, flag_dir, regions_dir, pairs, info, classes, split_bp, 
     refs = info.loc[info["type"] == "reference", "label"].tolist()
     rd, sd = regions_dir / "mapped" / "bins", size_dir / "bins"
     flags = region_flags(rd, flag_dir, "bins", refs, min_calls) if refs and rd.is_dir() else None
-    if flags is None or not sd.is_dir() or not classes:
+    if flags is None or not sd.is_dir():
+        return
+    if not classes:
+        print("\nFragment size: no --size-classes given (step 11 script older than this module?); skipped")
         return
     rm, rn, base_ok = flags
     lo = {c: float(c.split("-")[0]) for c in classes}
