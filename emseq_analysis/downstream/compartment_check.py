@@ -344,6 +344,7 @@ def size_split(size_dir, flag_dir, regions_dir, pairs, info, classes, split_bp, 
         print("\nFragment size: no --size-classes given (step 11 script older than this module?); skipped")
         return
     rm, rn, base_ok = flags
+    rd_names = load_counts(next(rd.glob("*.tsv")))[0]
     lo = {c: float(c.split("-")[0]) for c in classes}
     short_cls = [c for c in classes if lo[c] < split_bp]
     long_cls = [c for c in classes if lo[c] >= split_bp]
@@ -354,6 +355,11 @@ def size_split(size_dir, flag_dir, regions_dir, pairs, info, classes, split_bp, 
         if not all(p.exists() for p in files.values()):
             continue
         cnt = {k: load_counts(p) for k, p in files.items()}
+        nbins = len(rm)
+        for k, v in cnt.items():
+            if len(v[0]) != nbins:      # empty class (no fragments of that size): zero counts
+                print(f"WARNING: {files[k].name} has {len(v[0])} rows, expected {nbins}; counted as no calls")
+                cnt[k] = (rd_names, np.zeros(nbins), np.zeros(nbins))
         c = {"PL_short": sum_counts([cnt[(pl, k)] for k in short_cls]),
              "PL_long": sum_counts([cnt[(pl, k)] for k in long_cls]),
              "BAL_short": sum_counts([cnt[(bal, k)] for k in short_cls]),
