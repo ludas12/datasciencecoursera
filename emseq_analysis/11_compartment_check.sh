@@ -8,6 +8,7 @@
 # (FRAG_SIZE_EDGES), to see which fragment sizes carry the BAL deficit.
 # Needs steps 04 and 05.
 # Run with run_downstream.sh 11, or:  bash 11_compartment_check.sh
+# All read pairs, not only properly paired:  FRAG_ALL_PAIRS=true bash run_downstream.sh 11
 # shellcheck disable=SC1091
 source "${PIPE_DIR:-$(dirname "$0")}/scripts/common.sh"
 activate_env "$DOWNSTREAM_ENV"
@@ -35,7 +36,16 @@ mv "$cpgs.part" "$cpgs"
 # = |TLEN| + bases clipped before alignment; the same read-end exclusions as
 # step 03 (MD_INCLUSION, CLIP_5P) are applied. Short/long (FRAG_SPLIT_BP) are
 # sums of classes, so FRAG_SPLIT_BP must be one of the edges.
-SZ="$C/size_split"
+# FRAG_ALL_PAIRS=true also counts pairs the aligner did not flag as properly
+# paired (MethylDackel --keepDiscordant; fragments capped at FRAG_MAX_BP), e.g.
+# long plasma fragments outside bwa-meth's insert-size model. Results then go to
+# compartment/all_pairs/ so the default (proper pairs only) results are kept.
+SZ="$C/size_split"; OUT_C="$C"; md_pairs=(); cap=""
+if [[ "${FRAG_ALL_PAIRS:-false}" == true ]]; then
+    SZ="$C/size_split_all_pairs"; OUT_C="$C/all_pairs"; md_pairs=(--keepDiscordant); cap="${FRAG_MAX_BP:-1000}"
+    mkdir -p "$OUT_C"
+    log "size split counting all read pairs up to $cap bp (not only properly paired)"
+fi
 BINS="$DOWN_DIR/regions/beds/bins.bed"
 read -ra edges <<< "$FRAG_SIZE_EDGES"
 [[ " ${edges[*]} " == *" $FRAG_SPLIT_BP "* ]] || die "FRAG_SPLIT_BP ($FRAG_SPLIT_BP) must be one of FRAG_SIZE_EDGES ($FRAG_SIZE_EDGES)"
@@ -59,6 +69,7 @@ if [[ -s "$BINS" ]]; then
         for cls in "${classes[@]}"; do
             lo=$(( ${cls%-*} - c1 - c2 )); (( lo < 1 )) && lo=1
             hi=${cls#*-}
+            [[ $hi == inf && -n "$cap" ]] && hi=$cap
             if [[ $hi == inf ]]; then expr="tlen >= $lo || tlen <= -$lo"
             else hi=$(( hi - c1 - c2 )); expr="(tlen >= $lo && tlen < $hi) || (tlen <= -$lo && tlen > -$hi)"; fi
             sub="$SZ/tmp/$label.$cls.bam"
@@ -66,7 +77,7 @@ if [[ -s "$BINS" ]]; then
             samtools index "$sub"
             # shellcheck disable=SC2086
             MethylDackel extract -@ "$DOWNSTREAM_THREADS" -q "$MIN_MAPQ" -p "$MIN_BASEQ" \
-                ${md_ends[@]+"${md_ends[@]}"} $MD_INCLUSION --mergeContext \
+                ${md_ends[@]+"${md_ends[@]}"} ${md_pairs[@]+"${md_pairs[@]}"} $MD_INCLUSION --mergeContext \
                 -o "$SZ/tmp/$label.$cls" "$REF_FA" "$sub"
         done
         activate_env "$DOWNSTREAM_ENV"
@@ -87,6 +98,6 @@ fi
 python3 "$PIPE_DIR/downstream/compartment_check.py" --sample-info "$SAMPLE_INFO" \
     --imprinted-cpgs "$cpgs" --regions-dir "$DOWN_DIR/regions" --size-dir "$SZ" \
     --size-classes "$(IFS=,; echo "${classes[*]}")" --split-bp "$FRAG_SPLIT_BP" \
-    --min-calls "$MIN_REGION_CALLS" --max-cov-fold "$MAX_COV_FOLD" --out "$C" \
-    | tee "$C/compartment_summary.txt"
-log "results in $C"
+    --min-calls "$MIN_REGION_CALLS" --max-cov-fold "$MAX_COV_FOLD" --out "$OUT_C" \
+    | tee "$OUT_C/compartment_summary.txt"
+log "results in $OUT_C"
