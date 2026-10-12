@@ -80,16 +80,15 @@ Check `summary/qc_summary.txt` first:
 | `CpGs_cov10` | as many as possible | sequencing depth |
 | M-bias plots | flat lines along the read | end-repair bias → trim more |
 
-If the M-bias plots (`samples/*/mbias/*.svg`) show methylation rising or falling at the read ends, put the bounds into `MD_INCLUSION` in `config.sh`. Use the bounds MethylDackel suggests (`mbias_suggestion` column) or set your own, e.g. `--nOT 0,0,0,5 --nOB 0,0,5,0`. Then re-call methylation without re-aligning:
+If the M-bias plots (`samples/*/mbias/*.svg`) show methylation rising or falling at the read ends, put inclusion bounds into `MD_INCLUSION` in `config.sh`. Use the bounds MethylDackel suggests (`mbias_suggestion` column), ideally one common setting for all libraries so they stay comparable, e.g. `--OT 3,0,12,40 --OB 3,0,12,40` (read 1 start, read 1 end, read 2 start, read 2 end; 0 = no bound). Then re-call methylation without re-aligning:
 
 ```bash
-for i in $(seq 1 $(($(wc -l < OUTDIR/samplesheet.tsv) - 1))); do
-    REDO=extract bash 03_process_sample.sh $i
-done
-bash 04_summarize.sh
+bash run_reextract.sh
 ```
 
-(or submit the same via `sbatch --array`).
+This submits the re-extraction for every sample, then steps 04 (with the SeqMonk export), 05 and 11. The previous summary and step 05/11 results are kept as `*_prev_<date>` for a before/after comparison.
+
+Bounds are positions in the aligned reads. Libraries aligned with `KEEP_FRAGMENT_ENDS=true` keep 10 more bases at the 5′ end than the pilot, so check their own M-bias before reusing pilot bounds.
 
 ## Notes
 - **Aligner:** `ALIGNER="bwameth"` (default) is fast and is what NEB uses for EM-seq. `ALIGNER="bismark"` uses Bismark/Bowtie2 alignment and deduplication. With either aligner, methylation is called with MethylDackel, so the outputs are identical in format.
