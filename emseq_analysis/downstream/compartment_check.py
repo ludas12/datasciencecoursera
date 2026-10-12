@@ -26,6 +26,13 @@ BAL against plasma by methylation level (from step 05 region counts)
   bal_vs_plasma_fit.tsv        intercept, slope, ratios, bootstrap 95 % CIs
   bal_vs_plasma.png
 
+Short vs long fragments (from --size-dir: bins/<label>.<short|long>.tsv)
+  size_split_fit.tsv, size_split_strata.tsv: the same comparison for plasma
+  short / plasma long, BAL long / plasma long, BAL short / plasma long and
+  BAL short / BAL long. BAL long ~ plasma long means the BAL deficit is
+  carried by its short fragments; a deficit in long fragments too points to
+  cell composition.
+
 With one library per compartment these describe this patient's samples; they
 are not tests of BAL versus plasma in general.
 """
@@ -201,6 +208,63 @@ def ratio(sel, mp, np_, mb, nb):
     return (mb[sel].sum() / nb[sel].sum()) / (mp[sel].sum() / np_[sel].sum())
 
 
+def region_flags(d, flag_dir, rset, refs, min_calls):
+    """Reference counts and usable-region mask (not blacklisted, enough reference calls)."""
+    ref = [load_counts(d / f"{r}.tsv") for r in refs if (d / f"{r}.tsv").exists()]
+    if not ref:
+        return None
+    names = ref[0][0]
+    rm, rn = sum(r[1] for r in ref), sum(r[2] for r in ref)
+    black = set()
+    bl = flag_dir / f"{rset}.blacklisted.bed"
+    if bl.exists() and bl.stat().st_size:
+        black = set(pd.read_csv(bl, sep="\t", header=None, usecols=[3])[3])
+    return rm, rn, ~np.isin(names, list(black)) & (rn >= min_calls)
+
+
+def compare(rm, rn, base_ok, x, y, min_calls, max_fold, rng):
+    """y against x pooled within strata of reference methylation, with bootstrap CIs."""
+    (_, mp, np_), (_, mb, nb) = x, y
+    ok = base_ok & (np_ >= min_calls) & (nb >= min_calls)
+    for n in (np_, nb):
+        med = np.median(n[n > 0]) if (n > 0).any() else 0
+        ok &= n <= max_fold * med
+    if ok.sum() < N_STRATA * MIN_STRATUM_REGIONS:
+        return None
+    edges = np.linspace(0, 1, N_STRATA + 1)
+    refm = rm[ok] / rn[ok]
+    s = np.clip(np.digitize(refm, edges) - 1, 0, N_STRATA - 1)
+    a_mp, a_np, a_mb, a_nb = mp[ok], np_[ok], mb[ok], nb[ok]
+    nreg = np.bincount(s, minlength=N_STRATA)
+    keep = nreg >= MIN_STRATUM_REGIONS
+    xs, ys, a, b = fit_strata(s, a_mp, a_np, a_mb, a_nb, keep)
+    hi = (refm >= HIGH[0]) & (refm <= HIGH[1])
+    mid = (refm >= MID[0]) & (refm < MID[1])
+    boot = []
+    k = len(s)
+    for _ in range(N_BOOT_BINS):
+        i = rng.integers(0, k, k)
+        kp = keep & (np.bincount(s[i], minlength=N_STRATA) >= MIN_STRATUM_REGIONS)
+        _, _, ba, bb = fit_strata(s[i], a_mp[i], a_np[i], a_mb[i], a_nb[i], kp)
+        boot.append((ba, bb, ratio(hi[i], a_mp[i], a_np[i], a_mb[i], a_nb[i]),
+                     ratio(mid[i], a_mp[i], a_np[i], a_mb[i], a_nb[i])))
+    ci = np.nanpercentile(np.array(boot), [2.5, 97.5], axis=0)
+    mids = (edges[:-1] + edges[1:]) / 2
+    strata = [{"ref_meth_mid": mids[j], "regions": int(nreg[j]), "x_meth": xs[j], "y_meth": ys[j],
+               "y_over_x": ys[j] / xs[j] if xs[j] > 0 else float("nan")} for j in np.flatnonzero(keep)]
+    fit = {"regions": int(ok.sum()), "x_meth": a_mp.sum() / a_np.sum(), "y_meth": a_mb.sum() / a_nb.sum(),
+           "intercept": a, "intercept_lo": ci[0, 0], "intercept_hi": ci[1, 0],
+           "slope": b, "slope_lo": ci[0, 1], "slope_hi": ci[1, 1],
+           "ratio_high": ratio(hi, a_mp, a_np, a_mb, a_nb), "ratio_high_lo": ci[0, 2], "ratio_high_hi": ci[1, 2],
+           "ratio_mid": ratio(mid, a_mp, a_np, a_mb, a_nb), "ratio_mid_lo": ci[0, 3], "ratio_mid_hi": ci[1, 3]}
+    plot = (a_mp / a_np, a_mb / a_nb, xs[keep], ys[keep], a, b)
+    return fit, strata, plot
+
+
+def ci_txt(r, key):
+    return f"{fmt(r[key])} [{fmt(r[key + '_lo'])}, {fmt(r[key + '_hi'])}]"
+
+
 def stratified(regions_dir, flag_dir, pairs, info, min_calls, max_fold, out):
     mapped = regions_dir / "mapped"
     refs = info.loc[info["type"] == "reference", "label"].tolist()
@@ -209,66 +273,30 @@ def stratified(regions_dir, flag_dir, pairs, info, min_calls, max_fold, out):
         return
     rng = np.random.default_rng(SEED)
     srows, frows, plots = [], [], []
-    edges = np.linspace(0, 1, N_STRATA + 1)
     for rset in ("bins", "cpg_islands", "promoters"):
         d = mapped / rset
-        if not d.is_dir():
+        flags = region_flags(d, flag_dir, rset, refs, min_calls) if d.is_dir() else None
+        if flags is None:
             continue
-        ref = [load_counts(d / f"{r}.tsv") for r in refs if (d / f"{r}.tsv").exists()]
-        if not ref:
-            continue
-        names = ref[0][0]
-        rm = sum(r[1] for r in ref)
-        rn = sum(r[2] for r in ref)
-        black = set()
-        bl = flag_dir / f"{rset}.blacklisted.bed"
-        if bl.exists() and bl.stat().st_size:
-            black = set(pd.read_csv(bl, sep="\t", header=None, usecols=[3])[3])
-        notblack = ~np.isin(names, list(black))
+        rm, rn, base_ok = flags
         for name, pl, bal in pairs:
             if not ((d / f"{pl}.tsv").exists() and (d / f"{bal}.tsv").exists()):
                 continue
-            _, mp, np_ = load_counts(d / f"{pl}.tsv")
-            _, mb, nb = load_counts(d / f"{bal}.tsv")
-            ok = notblack & (rn >= min_calls) & (np_ >= min_calls) & (nb >= min_calls)
-            for n in (np_, nb):
-                med = np.median(n[n > 0]) if (n > 0).any() else 0
-                ok &= n <= max_fold * med
-            if ok.sum() < N_STRATA * MIN_STRATUM_REGIONS:
-                print(f"\n{rset} {name}: only {ok.sum()} regions with >= {min_calls} calls; skipped")
+            res = compare(rm, rn, base_ok, load_counts(d / f"{pl}.tsv"), load_counts(d / f"{bal}.tsv"),
+                          min_calls, max_fold, rng)
+            if res is None:
+                print(f"\n{rset} {name}: too few regions with >= {min_calls} calls; skipped")
                 continue
-            refm = rm[ok] / rn[ok]
-            s = np.clip(np.digitize(refm, edges) - 1, 0, N_STRATA - 1)
-            a_mp, a_np, a_mb, a_nb = mp[ok], np_[ok], mb[ok], nb[ok]
-            nreg = np.bincount(s, minlength=N_STRATA)
-            keep = nreg >= MIN_STRATUM_REGIONS
-            xs, ys, a, b = fit_strata(s, a_mp, a_np, a_mb, a_nb, keep)
-            hi = (refm >= HIGH[0]) & (refm <= HIGH[1])
-            mid = (refm >= MID[0]) & (refm < MID[1])
-            r_hi, r_mid = ratio(hi, a_mp, a_np, a_mb, a_nb), ratio(mid, a_mp, a_np, a_mb, a_nb)
-            boot = []
-            k = len(s)
-            for _ in range(N_BOOT_BINS):
-                i = rng.integers(0, k, k)
-                nr = np.bincount(s[i], minlength=N_STRATA)
-                kp = keep & (nr >= MIN_STRATUM_REGIONS)
-                _, _, ba, bb = fit_strata(s[i], a_mp[i], a_np[i], a_mb[i], a_nb[i], kp)
-                boot.append((ba, bb, ratio(hi[i], a_mp[i], a_np[i], a_mb[i], a_nb[i]),
-                             ratio(mid[i], a_mp[i], a_np[i], a_mb[i], a_nb[i])))
-            ci = np.nanpercentile(np.array(boot), [2.5, 97.5], axis=0)
-            mids = (edges[:-1] + edges[1:]) / 2
-            for j in np.flatnonzero(keep):
-                srows.append({"pair": name, "set": rset, "ref_meth_mid": mids[j], "regions": int(nreg[j]),
-                              "plasma_meth": xs[j], "bal_meth": ys[j],
-                              "bal_over_plasma": ys[j] / xs[j] if xs[j] > 0 else float("nan")})
-            frows.append({"pair": name, "set": rset, "regions": int(ok.sum()),
-                          "plasma_meth": a_mp.sum() / a_np.sum(), "bal_meth": a_mb.sum() / a_nb.sum(),
-                          "intercept": a, "intercept_lo": ci[0, 0], "intercept_hi": ci[1, 0],
-                          "slope": b, "slope_lo": ci[0, 1], "slope_hi": ci[1, 1],
-                          "ratio_high": r_hi, "ratio_high_lo": ci[0, 2], "ratio_high_hi": ci[1, 2],
-                          "ratio_mid": r_mid, "ratio_mid_lo": ci[0, 3], "ratio_mid_hi": ci[1, 3]})
+            fit, strata, plot = res
+            for st in strata:
+                srows.append({"pair": name, "set": rset, "ref_meth_mid": st["ref_meth_mid"],
+                              "regions": st["regions"], "plasma_meth": st["x_meth"], "bal_meth": st["y_meth"],
+                              "bal_over_plasma": st["y_over_x"]})
+            fit = {"pair": name, "set": rset, **fit}
+            fit["plasma_meth"], fit["bal_meth"] = fit.pop("x_meth"), fit.pop("y_meth")
+            frows.append(fit)
             if rset == "bins":
-                plots.append((name, pl, bal, a_mp / a_np, a_mb / a_nb, xs[keep], ys[keep], a, b))
+                plots.append((name, pl, bal, *plot))
     if not frows:
         print("\nBAL vs plasma by methylation level: no step 05 region counts (run step 05 first)")
         return
@@ -281,10 +309,7 @@ def stratified(regions_dir, flag_dir, pairs, info, min_calls, max_fold, out):
           "BAL/PL high-meth [CI]\tBAL/PL mid-meth [CI]")
     for _, r in fit.iterrows():
         print(f"{r['pair']}\t{r['set']}\t{r['regions']}\t{fmt(r['plasma_meth'])}\t{fmt(r['bal_meth'])}\t"
-              f"{fmt(r['intercept'])} [{fmt(r['intercept_lo'])}, {fmt(r['intercept_hi'])}]\t"
-              f"{fmt(r['slope'])} [{fmt(r['slope_lo'])}, {fmt(r['slope_hi'])}]\t"
-              f"{fmt(r['ratio_high'])} [{fmt(r['ratio_high_lo'])}, {fmt(r['ratio_high_hi'])}]\t"
-              f"{fmt(r['ratio_mid'])} [{fmt(r['ratio_mid_lo'])}, {fmt(r['ratio_mid_hi'])}]")
+              f"{ci_txt(r, 'intercept')}\t{ci_txt(r, 'slope')}\t{ci_txt(r, 'ratio_high')}\t{ci_txt(r, 'ratio_mid')}")
 
     fig, axes = plt.subplots(1, len(plots), figsize=(4.6 * len(plots), 4.4), squeeze=False)
     for ax, (name, pl, bal, x, y, sx, sy, a, b) in zip(axes[0], plots):
@@ -301,12 +326,60 @@ def stratified(regions_dir, flag_dir, pairs, info, min_calls, max_fold, out):
     plt.close(fig)
 
 
+def size_split(size_dir, flag_dir, regions_dir, pairs, info, min_calls, max_fold, out):
+    """Short vs long fragments: is the BAL deficit carried by its short fragments?"""
+    refs = info.loc[info["type"] == "reference", "label"].tolist()
+    rd, sd = regions_dir / "mapped" / "bins", size_dir / "bins"
+    flags = region_flags(rd, flag_dir, "bins", refs, min_calls) if refs and rd.is_dir() else None
+    if flags is None or not sd.is_dir():
+        return
+    rm, rn, base_ok = flags
+    rng = np.random.default_rng(SEED)
+    rows, strows = [], []
+    for name, pl, bal in pairs:
+        f = {k: sd / f"{lab}.{k2}.tsv" for k, lab, k2 in
+             (("PL_short", pl, "short"), ("PL_long", pl, "long"), ("BAL_short", bal, "short"), ("BAL_long", bal, "long"))}
+        if not all(p.exists() for p in f.values()):
+            continue
+        c = {k: load_counts(p) for k, p in f.items()}
+        calls = {k: v[2].sum() for k, v in c.items()}
+        for y, x in (("PL_short", "PL_long"), ("BAL_long", "PL_long"), ("BAL_short", "PL_long"),
+                     ("BAL_short", "BAL_long")):
+            res = compare(rm, rn, base_ok, c[x], c[y], min_calls, max_fold, rng)
+            if res is None:
+                continue
+            fit, strata, _ = res
+            rows.append({"pair": name, "comparison": f"{y} / {x}",
+                         "share_short_calls": calls[y.split("_")[0] + "_short"] /
+                         (calls[y.split("_")[0] + "_short"] + calls[y.split("_")[0] + "_long"]), **fit})
+            for st in strata:
+                strows.append({"pair": name, "comparison": f"{y} / {x}", **st})
+    if not rows:
+        print("\nShort vs long fragments: too few regions with enough calls per size class; skipped")
+        return
+    df = pd.DataFrame(rows)
+    df.to_csv(out / "size_split_fit.tsv", sep="\t", index=False, float_format="%.4f")
+    pd.DataFrame(strows).to_csv(out / "size_split_strata.tsv", sep="\t", index=False, float_format="%.4f")
+    print("\nShort vs long fragments (genomic bins, ratios of pooled methylation; strata of reference methylation)")
+    print("If BAL_long / PL_long is ~1 in both columns, the BAL deficit is carried by short fragments;")
+    print("if it keeps the high > mid pattern, BAL long fragments differ too (cell composition).")
+    print("pair\tcomparison\tregions\tx_meth\ty_meth\tratio high-meth [CI]\tratio mid-meth [CI]")
+    for _, r in df.iterrows():
+        print(f"{r['pair']}\t{r['comparison']}\t{r['regions']}\t{fmt(r['x_meth'])}\t{fmt(r['y_meth'])}\t"
+              f"{ci_txt(r, 'ratio_high')}\t{ci_txt(r, 'ratio_mid')}")
+    for name in df["pair"].unique():
+        sub = df[df["pair"] == name].set_index("comparison")["share_short_calls"]
+        pl_share = sub.get("PL_short / PL_long", float("nan"))
+        bal_share = sub.get("BAL_short / BAL_long", float("nan"))
+        print(f"{name}: share of CpG calls from short fragments: plasma {fmt(pl_share, 2)}, BAL {fmt(bal_share, 2)}")
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--sample-info", required=True)
     ap.add_argument("--imprinted-cpgs", help="label chr pos gene n_meth n_unmeth (no header)")
     ap.add_argument("--regions-dir", help="step 05 output (OUTDIR/downstream/regions)")
+    ap.add_argument("--size-dir", help="region counts by fragment size: <set>/<label>.<short|long>.tsv")
     ap.add_argument("--min-calls", type=int, default=10, help="calls per region in every library")
     ap.add_argument("--max-cov-fold", type=float, default=10)
     ap.add_argument("--out", required=True)
@@ -323,6 +396,8 @@ def main():
     if a.regions_dir:
         rd = Path(a.regions_dir)
         stratified(rd, rd / "beds", pairs, info, a.min_calls, a.max_cov_fold, out)
+        if a.size_dir:
+            size_split(Path(a.size_dir), rd / "beds", rd, pairs, info, a.min_calls, a.max_cov_fold, out)
 
 
 if __name__ == "__main__":

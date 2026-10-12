@@ -33,6 +33,7 @@ export EMSEQ_CONFIG
 : "${MIN_REGION_CALLS:=10}"               # CpG calls a region needs in every sample (step 05)
 : "${MIN_COMPARE_CALLS:=50}"              # calls in both samples for a region to be compared (05)
 : "${IDENTITY_REGIONS:=chr20,chr21,chr22}"
+: "${FRAG_SPLIT_BP:=150}"                 # short/long fragment boundary for step 11
 # Gene sets for TSS footprints (step 09): the large Human Protein Atlas sets if built
 # (downstream/build_genesets_hpa.py), otherwise the curated sets.
 if [[ -z "${FRAG_GENESETS:-}" ]]; then
