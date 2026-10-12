@@ -62,7 +62,7 @@ if [[ -s "$BINS" ]]; then
         done
         activate_env "$DOWNSTREAM_ENV"
         for cls in short long; do
-            awk -v OFS='\t' 'NR > 1 {print $1, $2, $3, $5, $6}' "$SZ/tmp/$label.${cls}_CpG.bedGraph" \
+            awk -v OFS='\t' 'NR > 1 && $1 ~ /^chr/ {print $1, $2, $3, $5, $6}' "$SZ/tmp/$label.${cls}_CpG.bedGraph" \
                 | LC_ALL=C sort -k1,1 -k2,2n -S 2G -T "$SZ/tmp" \
                 | bedtools map -a "$BINS" -b - -c 4,5 -o sum,sum > "$SZ/bins/$label.$cls.tsv.part"
             mv "$SZ/bins/$label.$cls.tsv.part" "$SZ/bins/$label.$cls.tsv"
