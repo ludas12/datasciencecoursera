@@ -26,12 +26,14 @@ BAL against plasma by methylation level (from step 05 region counts)
   bal_vs_plasma_fit.tsv        intercept, slope, ratios, bootstrap 95 % CIs
   bal_vs_plasma.png
 
-Short vs long fragments (from --size-dir: bins/<label>.<short|long>.tsv)
+Fragment size (from --size-dir: bins/<label>.<class>.tsv, classes from --size-classes)
   size_split_fit.tsv, size_split_strata.tsv: the same comparison for plasma
   short / plasma long, BAL long / plasma long, BAL short / plasma long and
   BAL short / BAL long. BAL long ~ plasma long means the BAL deficit is
   carried by its short fragments; a deficit in long fragments too points to
   cell composition.
+  size_classes.tsv: each size class of plasma and BAL against plasma long
+  fragments, with its share of CpG calls.
 
 With one library per compartment these describe this patient's samples; they
 are not tests of BAL versus plasma in general.
@@ -326,22 +328,33 @@ def stratified(regions_dir, flag_dir, pairs, info, min_calls, max_fold, out):
     plt.close(fig)
 
 
-def size_split(size_dir, flag_dir, regions_dir, pairs, info, min_calls, max_fold, out):
-    """Short vs long fragments: is the BAL deficit carried by its short fragments?"""
+def sum_counts(parts):
+    names = parts[0][0]
+    return names, sum(p[1] for p in parts), sum(p[2] for p in parts)
+
+
+def size_split(size_dir, flag_dir, regions_dir, pairs, info, classes, split_bp, min_calls, max_fold, out):
+    """Methylation by fragment size: which sizes carry the BAL deficit?"""
     refs = info.loc[info["type"] == "reference", "label"].tolist()
     rd, sd = regions_dir / "mapped" / "bins", size_dir / "bins"
     flags = region_flags(rd, flag_dir, "bins", refs, min_calls) if refs and rd.is_dir() else None
-    if flags is None or not sd.is_dir():
+    if flags is None or not sd.is_dir() or not classes:
         return
     rm, rn, base_ok = flags
+    lo = {c: float(c.split("-")[0]) for c in classes}
+    short_cls = [c for c in classes if lo[c] < split_bp]
+    long_cls = [c for c in classes if lo[c] >= split_bp]
     rng = np.random.default_rng(SEED)
-    rows, strows = [], []
+    rows, strows, crows = [], [], []
     for name, pl, bal in pairs:
-        f = {k: sd / f"{lab}.{k2}.tsv" for k, lab, k2 in
-             (("PL_short", pl, "short"), ("PL_long", pl, "long"), ("BAL_short", bal, "short"), ("BAL_long", bal, "long"))}
-        if not all(p.exists() for p in f.values()):
+        files = {(lab, c): sd / f"{lab}.{c}.tsv" for lab in (pl, bal) for c in classes}
+        if not all(p.exists() for p in files.values()):
             continue
-        c = {k: load_counts(p) for k, p in f.items()}
+        cnt = {k: load_counts(p) for k, p in files.items()}
+        c = {"PL_short": sum_counts([cnt[(pl, k)] for k in short_cls]),
+             "PL_long": sum_counts([cnt[(pl, k)] for k in long_cls]),
+             "BAL_short": sum_counts([cnt[(bal, k)] for k in short_cls]),
+             "BAL_long": sum_counts([cnt[(bal, k)] for k in long_cls])}
         calls = {k: v[2].sum() for k, v in c.items()}
         for y, x in (("PL_short", "PL_long"), ("BAL_long", "PL_long"), ("BAL_short", "PL_long"),
                      ("BAL_short", "BAL_long")):
@@ -349,18 +362,34 @@ def size_split(size_dir, flag_dir, regions_dir, pairs, info, min_calls, max_fold
             if res is None:
                 continue
             fit, strata, _ = res
+            comp = y.split("_")[0]
             rows.append({"pair": name, "comparison": f"{y} / {x}",
-                         "share_short_calls": calls[y.split("_")[0] + "_short"] /
-                         (calls[y.split("_")[0] + "_short"] + calls[y.split("_")[0] + "_long"]), **fit})
+                         "share_short_calls": calls[comp + "_short"] / (calls[comp + "_short"] + calls[comp + "_long"]),
+                         **fit})
             for st in strata:
                 strows.append({"pair": name, "comparison": f"{y} / {x}", **st})
+        # each size class against plasma long fragments; classes are sparse, so any
+        # region with calls in both is used (selection on coverage, not methylation)
+        tot = {lab: sum(cnt[(lab, k)][2].sum() for k in classes) for lab in (pl, bal)}
+        for comp, lab in (("PL", pl), ("BAL", bal)):
+            for k in classes:
+                res = compare(rm, rn, base_ok, c["PL_long"], cnt[(lab, k)], 1, max_fold, rng)
+                row = {"pair": name, "library": comp, "size_class": k,
+                       "share_calls": cnt[(lab, k)][2].sum() / tot[lab] if tot[lab] else float("nan")}
+                if res is not None:
+                    fit, _, _ = res
+                    row.update({"regions": fit["regions"], "meth": fit["y_meth"],
+                                **{f: fit[f] for f in ("ratio_high", "ratio_high_lo", "ratio_high_hi",
+                                                       "ratio_mid", "ratio_mid_lo", "ratio_mid_hi")}})
+                crows.append(row)
     if not rows:
         print("\nShort vs long fragments: too few regions with enough calls per size class; skipped")
         return
     df = pd.DataFrame(rows)
     df.to_csv(out / "size_split_fit.tsv", sep="\t", index=False, float_format="%.4f")
     pd.DataFrame(strows).to_csv(out / "size_split_strata.tsv", sep="\t", index=False, float_format="%.4f")
-    print("\nShort vs long fragments (genomic bins, ratios of pooled methylation; strata of reference methylation)")
+    print(f"\nShort (< {split_bp:g} bp) vs long fragments (genomic bins, ratios of pooled methylation; "
+          "strata of reference methylation)")
     print("If BAL_long / PL_long is ~1 in both columns, the BAL deficit is carried by short fragments;")
     print("if it keeps the high > mid pattern, BAL long fragments differ too (cell composition).")
     print("pair\tcomparison\tregions\tx_meth\ty_meth\tratio high-meth [CI]\tratio mid-meth [CI]")
@@ -372,6 +401,19 @@ def size_split(size_dir, flag_dir, regions_dir, pairs, info, min_calls, max_fold
         pl_share = sub.get("PL_short / PL_long", float("nan"))
         bal_share = sub.get("BAL_short / BAL_long", float("nan"))
         print(f"{name}: share of CpG calls from short fragments: plasma {fmt(pl_share, 2)}, BAL {fmt(bal_share, 2)}")
+    if crows:
+        cdf = pd.DataFrame(crows)
+        cdf.to_csv(out / "size_classes.tsv", sep="\t", index=False, float_format="%.4f")
+        print("\nBy size class (bp), each against the same timepoint's plasma long fragments")
+        print("pair\tlibrary\tsize_class\tshare_calls\tregions\tmeth\tratio high-meth [CI]\tratio mid-meth [CI]")
+        for _, r in cdf.iterrows():
+            if "ratio_high" in r and pd.notna(r.get("ratio_high")):
+                print(f"{r['pair']}\t{r['library']}\t{r['size_class']}\t{fmt(r['share_calls'], 3)}\t"
+                      f"{int(r['regions'])}\t{fmt(r['meth'])}\t{ci_txt(r, 'ratio_high')}\t{ci_txt(r, 'ratio_mid')}")
+            else:
+                print(f"{r['pair']}\t{r['library']}\t{r['size_class']}\t{fmt(r['share_calls'], 3)}\t"
+                      "too few regions")
+
 
 
 def main():
@@ -380,6 +422,8 @@ def main():
     ap.add_argument("--imprinted-cpgs", help="label chr pos gene n_meth n_unmeth (no header)")
     ap.add_argument("--regions-dir", help="step 05 output (OUTDIR/downstream/regions)")
     ap.add_argument("--size-dir", help="region counts by fragment size: <set>/<label>.<short|long>.tsv")
+    ap.add_argument("--size-classes", default="", help="comma-separated size classes, e.g. 0-100,100-150,...,400-inf")
+    ap.add_argument("--split-bp", type=float, default=150, help="short/long boundary (a class edge)")
     ap.add_argument("--min-calls", type=int, default=10, help="calls per region in every library")
     ap.add_argument("--max-cov-fold", type=float, default=10)
     ap.add_argument("--out", required=True)
@@ -397,7 +441,9 @@ def main():
         rd = Path(a.regions_dir)
         stratified(rd, rd / "beds", pairs, info, a.min_calls, a.max_cov_fold, out)
         if a.size_dir:
-            size_split(Path(a.size_dir), rd / "beds", rd, pairs, info, a.min_calls, a.max_cov_fold, out)
+            classes = [c for c in a.size_classes.split(",") if c]
+            size_split(Path(a.size_dir), rd / "beds", rd, pairs, info, classes, a.split_bp,
+                       a.min_calls, a.max_cov_fold, out)
 
 
 if __name__ == "__main__":

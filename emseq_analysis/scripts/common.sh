@@ -34,6 +34,7 @@ export EMSEQ_CONFIG
 : "${MIN_COMPARE_CALLS:=50}"              # calls in both samples for a region to be compared (05)
 : "${IDENTITY_REGIONS:=chr20,chr21,chr22}"
 : "${FRAG_SPLIT_BP:=150}"                 # short/long fragment boundary for step 11
+: "${FRAG_SIZE_EDGES:=100 150 220 400}"   # size-class edges (bp) for step 11; must include FRAG_SPLIT_BP
 # Gene sets for TSS footprints (step 09): the large Human Protein Atlas sets if built
 # (downstream/build_genesets_hpa.py), otherwise the curated sets.
 if [[ -z "${FRAG_GENESETS:-}" ]]; then
