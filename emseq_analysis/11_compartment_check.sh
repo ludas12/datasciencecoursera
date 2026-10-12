@@ -24,7 +24,7 @@ while IFS=$'\t' read -r sample label _ _ include _; do
     [[ "$sample" == sample || "$include" != yes ]] && continue
     bg="$OUTDIR/samples/$sample/meth/${sample}_CpG.bedGraph.gz"
     [[ -s "$bg" ]] || { log "WARNING: no CpG calls for $sample; skipping"; continue; }
-    zcat "$bg" | awk 'NR > 1' | bedtools intersect -wa -wb -a - -b "$IMPRINTED_BED" \
+    zcat "$bg" | awk 'NR > 1 && $1 ~ /^chr/' | bedtools intersect -wa -wb -a - -b "$IMPRINTED_BED" \
         | awk -v OFS='\t' -v l="$label" '{print l, $1, $2, $10, $5, $6}' | sort -u >> "$cpgs.part"
 done < "$SAMPLE_INFO"
 mv "$cpgs.part" "$cpgs"
