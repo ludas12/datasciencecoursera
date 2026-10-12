@@ -45,7 +45,7 @@ if [[ -s "$BINS" ]]; then
     mkdir -p "$SZ/bins" "$SZ/tmp"
     while IFS=$'\t' read -r sample label type _ include _; do
         [[ "$sample" == sample || "$include" != yes ]] && continue
-        [[ "${type,,}" == plasma || "${type,,}" == bal ]] || continue
+        [[ "${type,,}" == plasma || "${type,,}" == bal || "${type,,}" == reference ]] || continue
         bam="$OUTDIR/samples/$sample/align/$sample.final.bam"
         [[ -s "$bam" ]] || { log "WARNING: no BAM for $sample; skipping size split"; continue; }
         done_file="$SZ/bins/$label.classes"

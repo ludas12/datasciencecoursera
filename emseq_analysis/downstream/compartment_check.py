@@ -34,6 +34,9 @@ Fragment size (from --size-dir: bins/<label>.<class>.tsv, classes from --size-cl
   cell composition.
   size_classes.tsv: each size class of plasma and BAL against plasma long
   fragments, with its share of CpG calls.
+  size_profile.tsv: within every library (references included), each size
+  class against the library's own 150-220 bp class. Spike-in verified
+  reference DNA gives the technical baseline for length dependence.
 
 With one library per compartment these describe this patient's samples; they
 are not tests of BAL versus plasma in general.
@@ -424,6 +427,63 @@ def size_split(size_dir, flag_dir, regions_dir, pairs, info, classes, split_bp, 
                       "too few regions")
 
 
+def size_profile(size_dir, flag_dir, regions_dir, info, classes, split_bp, max_fold, out):
+    """Within each library: every size class against its own class starting at split_bp.
+
+    Sheared reference DNA (spike-in verified) shows whether methylation depends on
+    fragment length for technical reasons. A reference library is stratified by the
+    other reference(s) only, so its own reads don't define the strata.
+    """
+    rd, sd = regions_dir / "mapped" / "bins", size_dir / "bins"
+    base_cls = next((c for c in classes if float(c.split("-")[0]) == split_bp), None)
+    if not rd.is_dir() or not sd.is_dir() or base_cls is None:
+        return
+    refs = info.loc[info["type"] == "reference", "label"].tolist()
+    rng = np.random.default_rng(SEED)
+    rows = []
+    for _, lib in info.iterrows():
+        lab = lib["label"]
+        files = {c: sd / f"{lab}.{c}.tsv" for c in classes}
+        if not all(p.exists() for p in files.values()):
+            continue
+        strata_refs = [r for r in refs if r != lab]
+        flags = region_flags(rd, flag_dir, "bins", strata_refs, 10) if strata_refs else None
+        if flags is None:
+            continue
+        rm, rn, base_ok = flags
+        cnt = {c: load_counts(p) for c, p in files.items()}
+        for c, v in cnt.items():
+            if len(v[0]) != len(rm):
+                cnt[c] = (v[0], np.zeros(len(rm)), np.zeros(len(rm)))
+        tot = sum(v[2].sum() for v in cnt.values())
+        for c in classes:
+            row = {"library": lab, "type": lib["type"], "size_class": c,
+                   "share_calls": cnt[c][2].sum() / tot if tot else float("nan"),
+                   "strata_from": ",".join(strata_refs)}
+            res = None if c == base_cls else compare(rm, rn, base_ok, cnt[base_cls], cnt[c], 1, max_fold, rng)
+            if res is not None:
+                fit = res[0]
+                row.update({"regions": fit["regions"], "meth": fit["y_meth"],
+                            **{f: fit[f] for f in ("ratio_high", "ratio_high_lo", "ratio_high_hi",
+                                                   "ratio_mid", "ratio_mid_lo", "ratio_mid_hi")}})
+            rows.append(row)
+    if not rows:
+        return
+    df = pd.DataFrame(rows)
+    df.to_csv(out / "size_profile.tsv", sep="\t", index=False, float_format="%.4f")
+    print(f"\nWithin each library: size class against its own {base_cls} bp fragments "
+          "(references: technical baseline; strata from the other reference)")
+    print("library\ttype\tsize_class\tshare_calls\tmeth\tratio high-meth [CI]\tratio mid-meth [CI]")
+    for _, r in df.iterrows():
+        if r["size_class"] == base_cls:
+            print(f"{r['library']}\t{r['type']}\t{r['size_class']}\t{fmt(r['share_calls'], 3)}\t-\t(baseline)")
+        elif pd.notna(r.get("ratio_high", float("nan"))):
+            print(f"{r['library']}\t{r['type']}\t{r['size_class']}\t{fmt(r['share_calls'], 3)}\t{fmt(r['meth'])}\t"
+                  f"{ci_txt(r, 'ratio_high')}\t{ci_txt(r, 'ratio_mid')}")
+        else:
+            print(f"{r['library']}\t{r['type']}\t{r['size_class']}\t{fmt(r['share_calls'], 3)}\t-\ttoo few regions")
+
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -453,6 +513,8 @@ def main():
             classes = [c for c in a.size_classes.split(",") if c]
             size_split(Path(a.size_dir), rd / "beds", rd, pairs, info, classes, a.split_bp,
                        a.min_calls, a.max_cov_fold, out)
+            if classes:
+                size_profile(Path(a.size_dir), rd / "beds", rd, info, classes, a.split_bp, a.max_cov_fold, out)
 
 
 if __name__ == "__main__":
