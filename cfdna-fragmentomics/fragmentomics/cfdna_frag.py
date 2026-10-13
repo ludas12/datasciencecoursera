@@ -155,6 +155,32 @@ def ladder_amplitude(hist, lo=80, hi=150):
     return best
 
 
+# Nucleosome ladder windows (insert size, bp): each multi-nucleosome peak is compared with the
+# troughs on either side. A ladder (DNA cut between nucleosomes) gives peak/trough >> 1; a smooth
+# smear of randomly cut DNA gives ~1. Positions follow the sequenced plasma ladder (~167/335/520 bp)
+# and the BAL TapeStation ladder (inserts ~157/353/535/781 bp).
+LADDER = {
+    "di": ((320, 370), (240, 290), (420, 470)),
+    "tri": ((500, 560), (420, 470), (600, 650)),
+    "tetra": ((690, 780), (600, 650), (820, 880)),
+}
+
+
+def ladder_scores(hist):
+    """Peak / mean-trough density for the di-, tri- and tetra-nucleosome steps, plus their
+    geometric mean over di and tri (the steps sequencing samples well enough)."""
+    out = {}
+    for step, (peak, lo, hi) in LADDER.items():
+        mean = lambda w: hist[w[0]:w[1] + 1].mean()  # noqa: E731
+        total = sum(hist[w[0]:w[1] + 1].sum() for w in (peak, lo, hi))
+        trough = (mean(lo) + mean(hi)) / 2
+        # too few fragments in the windows -> no reliable ratio
+        out[f"ladder_{step}"] = float(mean(peak) / trough) if trough > 0 and total >= 100 else np.nan
+    di, tri = out["ladder_di"], out["ladder_tri"]
+    out["nucleosome_ladder_score"] = float(np.sqrt(di * tri)) if di > 0 and tri > 0 else np.nan  # NaN-safe
+    return out
+
+
 def size_features(lengths):
     hist = np.bincount(lengths, minlength=MAX_LEN + 1)[: MAX_LEN + 1]
     n = hist.sum()
@@ -251,6 +277,11 @@ def features(args):
     name = args.name or os.path.basename(args.out.rstrip("/"))
     frags = pd.read_csv(args.fragments, sep="\t",
                         dtype={"chrom": str, "motif_5p": str, "motif_3p": str})
+    # full-range histogram (up to MAX_LEN) for the size plot and the nucleosome ladder; all other
+    # size metrics use --min-len/--max-len so they stay comparable with earlier runs
+    full_len = frags.length[frags.length.between(args.min_len, MAX_LEN)
+                            & frags.chrom.str.match(args.chroms)].values
+    hist_full = np.bincount(full_len, minlength=MAX_LEN + 1)[: MAX_LEN + 1]
     frags = frags[frags.length.between(args.min_len, args.max_len)]
 
     # Sex-chromosome fractions. In a sex-mismatched transplant (male donor -> female recipient)
@@ -261,6 +292,8 @@ def features(args):
     log(f"{name}: {len(frags):,} fragments on autosomes")
 
     hist, summary = size_features(frags.length.values)
+    summary.update(ladder_scores(hist_full))
+    summary["frac_gt600_of_all"] = float(hist_full[args.max_len + 1:].sum() / max(hist_full.sum(), 1))
     motif_freq, mds = motif_features(frags)
     summary["motif_diversity_score"] = mds
     summary.update(sex)
@@ -270,7 +303,7 @@ def features(args):
     summary["n_bins_pass"] = int(bins["pass"].sum())
     summary["sample"] = name
 
-    pd.DataFrame({"length": np.arange(len(hist)), "count": hist}).to_csv(
+    pd.DataFrame({"length": np.arange(len(hist_full)), "count": hist_full}).to_csv(
         f"{args.out}/size_hist.tsv", sep="\t", index=False)
     motif_freq.rename("freq").rename_axis("motif").to_csv(f"{args.out}/end_motifs.tsv", sep="\t")
     bins.to_csv(f"{args.out}/bins.tsv", sep="\t", index=False, float_format="%.5g")
@@ -547,7 +580,7 @@ def cohort(args):
             ax.plot(h.index, h.values, lw=1.1, ls=ls, color=gcol[g], label=f"{name} ({g})")
     axes[0].set(xlim=(50, 450), xlabel="Fragment length (bp)", ylabel="Proportion",
                 title="Fragment size distribution")
-    axes[1].set(xlim=(50, 600), yscale="log", xlabel="Fragment length (bp)",
+    axes[1].set(xlim=(50, MAX_LEN), yscale="log", xlabel="Fragment length (bp)",
                 title="Log scale (long / multi-nucleosomal fragments)")
     for ax in axes:
         ax.axvline(167, color="grey", ls=":", lw=0.8)
@@ -655,7 +688,8 @@ def cohort(args):
                "motif_CCCA": "CCCA end-motif freq.", "motif_diversity_score": "Motif diversity",
                "peak167_prominence": "167 bp peak prominence",
                "ladder_amp_80_150": "10 bp ladder amplitude (80-150 bp)",
-               "frac_400_600": "Fraction 400-600 bp (random cuts)"}
+               "frac_400_600": "Fraction 400-600 bp (random cuts)",
+               "nucleosome_ladder_score": "Nucleosome ladder score (di, tri)"}
     panels = [(summary[k], v) for k, v in metrics.items() if k in summary]
     if tss_sum:
         if "inactive_control" in primary.columns:

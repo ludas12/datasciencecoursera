@@ -145,6 +145,14 @@ Three metrics in `summary.json` / `size_motif_summary.tsv` capture this:
 | `ladder_amp_80_150` | amplitude of a 10–11 bp sinusoid fitted to the detrended 80–150 bp histogram (0.10 = peaks 10% above trend) | low | high |
 | `frac_400_600` | fraction of fragments 400–600 bp (structureless long tail) | low | high |
 
+Nucleosome ladder (fragments up to 1,000 bp): `ladder_di`, `ladder_tri`, `ladder_tetra` compare
+each multi-nucleosome peak (320–370, 500–560, 690–780 bp) with the troughs either side;
+`nucleosome_ladder_score` is the geometric mean of di and tri. ≈1 = smooth smear of randomly cut
+DNA (e.g. BAL LC6); ≫1 = DNA cut between nucleosomes (BAL LC10/LC16, and plasma). Use it to
+compare BAL samples with each other; sequencing under-samples long fragments, so tetra is noisy.
+`size_hist.tsv` and the log-scale size plot now extend to 1,000 bp; all other size metrics still
+use 50–600 bp so they remain comparable with earlier runs.
+
 The ladder amplitude has a noise floor that falls with fragment count (~0.1–0.2 at 60k
 fragments, roughly 10× lower at several million), so compare samples of similar depth.
 Extra columns in `samples.tsv` (e.g. `patient`, `diagnosis`) are carried into the cohort tables.
