@@ -18,6 +18,11 @@
 # name. Read start = fragment end, so leaving them in shifts every fragment end and length.
 # IDT xGen cfDNA & FFPE DNA Library Prep v2 MC: fixed, in-line 8 bp UMIs (32 sequences) at the
 # start of R1 and R2 (IDT manual; matches FastQC per-base content) -> UMI_LEN=8.
+#
+# READ_LEN (env, default 0 = off): cut every read to its first READ_LEN bases (UMI included)
+# before trimming, so runs with different read lengths are processed identically, e.g.
+# READ_LEN=59 for 2x75 bp pilot data analysed together with a 2x59 bp batch. Reads already
+# shorter are left as they are, so it is safe to set for every sample.
 set -euo pipefail
 
 if [[ $# -lt 5 ]]; then
@@ -26,11 +31,24 @@ fi
 
 SAMPLE=$1; R1=$2; R2=$3; REF=$4; OUT=$5; THREADS=${6:-8}
 UMI_LEN=${UMI_LEN:-0}
+READ_LEN=${READ_LEN:-0}
 ALIGNER=${ALIGNER:-bwa-mem2}   # bwa-mem2 | bwa | bowtie2
 mkdir -p "$OUT"
 UMI_OPTS=()
 if (( UMI_LEN > 0 )); then
     UMI_OPTS=(--umi --umi_loc per_read --umi_len "$UMI_LEN")
+fi
+
+# 0. Optional: cut reads to a common length (see READ_LEN above).
+if (( READ_LEN > 0 )); then
+    cut_reads() {
+        gzip -cdf "$1" | awk -v L="$READ_LEN" 'NR % 2 == 0 { $0 = substr($0, 1, L) } 1' \
+            | gzip -1 > "$2"
+    }
+    cut_reads "$R1" "$OUT/$SAMPLE.cut.R1.fq.gz" & p1=$!
+    cut_reads "$R2" "$OUT/$SAMPLE.cut.R2.fq.gz" & p2=$!
+    wait "$p1"; wait "$p2"
+    R1=$OUT/$SAMPLE.cut.R1.fq.gz; R2=$OUT/$SAMPLE.cut.R2.fq.gz
 fi
 
 # 1. Trim adapters. Keep reads >= 30 bp: very short cfDNA fragments are real signal,
@@ -62,7 +80,7 @@ align \
 samtools markdup -@ "$THREADS" -s -f "$OUT/$SAMPLE.markdup.stats" \
          "$OUT/$SAMPLE.sorted.bam" "$OUT/$SAMPLE.bam"
 samtools index "$OUT/$SAMPLE.bam"
-rm -f "$OUT/$SAMPLE.sorted.bam" "$OUT"/"$SAMPLE".trim.R?.fq.gz
+rm -f "$OUT/$SAMPLE.sorted.bam" "$OUT"/"$SAMPLE".trim.R?.fq.gz "$OUT"/"$SAMPLE".cut.R?.fq.gz
 
 # 4. QC.
 samtools flagstat -@ "$THREADS" "$OUT/$SAMPLE.bam" > "$OUT/$SAMPLE.flagstat"

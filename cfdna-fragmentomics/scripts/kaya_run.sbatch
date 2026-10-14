@@ -12,8 +12,9 @@ REF=${REF:-$WORK/ref/hg38.fa}             # needs bwa-mem2 (or bwa, with ALIGNER
 BLACKLIST=${BLACKLIST:-$WORK/ref/hg38-blacklist.v2.bed}
 export ALIGNER=${ALIGNER:-bwa-mem2}   # bwa-mem2 | bwa | bowtie2 (then also set BT2_INDEX)
 export BT2_INDEX=${BT2_INDEX:-}
-OUT=$WORK/results
+OUT=${OUT:-$WORK/results}
 export UMI_LEN=8      # 8 bp in-line block at the start of R1 and R2 (see FastQC per-base content)
+export READ_LEN=${READ_LEN:-0}   # e.g. 59: cut 2x75 bp pilot reads to match a 2x59 bp batch (0 = off)
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "${CONDA_ENV:-cfdna-frag}"   # env name or path; override: sbatch --export=ALL,CONDA_ENV=fragtools ...

@@ -78,6 +78,20 @@ scripts/run_all.sh samples.tsv /ref/hg38.fa /ref/hg38-blacklist.v2.bed results 1
 Outputs in `results/cohort/`: `size_distribution.png`, `pca.png`, `delfi_ratio_heatmap.png`,
 `size_motif_summary.tsv` (one row per sample), `group_summary.tsv`, `alignment_qc.tsv`.
 
+**Mixing read lengths (pilot 2x75 bp, next batch 2x59 bp).** Read length does not change
+fragment lengths or end motifs, but it changes how many reads map uniquely (MAPQ >= 30), which
+affects coverage-based features (DELFI bins, TSS profiles). To compare batches directly, cut
+every read to the shortest length with `READ_LEN` before trimming. Reads already that short are
+untouched, so the same setting can be used for all samples. Re-process the pilot into a separate
+folder so the original results stay:
+```bash
+cd $WORK/cfdna-fragmentomics
+sbatch --export=ALL,READ_LEN=59,OUT=$WORK/results_59bp,ALIGNER=bowtie2,BT2_INDEX=<bowtie2 prefix>,\
+REF=<hg38.fa>,CONDA_ENV=<env path>,TSS_BED=$WORK/ref/gencode_v46_tss.bed,\
+GENESETS=fragmentomics/genesets_hpa.tsv scripts/kaya_run.sbatch
+```
+Use the same `READ_LEN=59` for the new batch, so all samples are processed identically.
+
 **What to expect / how to interpret**
 - **n = 2 per group:** treat this as descriptive / pilot data. Show distributions and per-sample
   values; don't run classifiers or p-values across groups.
