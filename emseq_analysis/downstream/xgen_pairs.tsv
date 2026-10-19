@@ -1,0 +1,6 @@
+emseq_label	xgen_sample
+CF0020_A_PL	CF0020A_P
+CF0020_A_BAL	CF0020A_BAL
+# add after batch 2, e.g.:
+# CF0007_C_PL	CF0007C_P
+# CF0007_C_BAL	CF0007C_BAL

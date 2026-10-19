@@ -209,6 +209,20 @@ By default MethylDackel counts only read pairs the aligner flagged as properly p
 
 The imprinted regions are RefSeq promoters (TSS ± 1 kb) of the genes in `IMPRINTED_GENES`, not curated imprinting-control coordinates. With one library per compartment, all of this describes one patient's samples, not BAL versus plasma in general.
 
+## Comparison with the xGen fragmentomics pipeline
+
+`downstream/compare_xgen.py` compares step 09 with the xGen `cfdna-fragmentomics` pipeline for the same cfDNA samples. Size and end-motif metrics are recomputed from both pipelines' raw tables with the same code and size range (50–600 bp), so differences reflect the library methods. Pairs are listed in `downstream/xgen_pairs.tsv`; xGen samples not in a pair (healthy plasma) are reported as context.
+
+```bash
+conda activate emseq_downstream
+python3 downstream/compare_xgen.py \
+    --emseq OUTDIR/downstream/fragmentomics \
+    --xgen /group/sbms001/hludewick/Fragmentomics/cfdna-fragmentomics/results \
+    --pairs downstream/xgen_pairs.tsv --out OUTDIR/downstream/xgen_comparison
+```
+
+Outputs: `metrics.tsv` (sizes, end motifs per library), `agreement.tsv` (per pair: correlation of size distributions, of the 256 end-motif frequencies and of 5 Mb short/long ratios), `tss_ndr.tsv` (promoter NDR per gene set, both methods) and `size_overlay.png`.
+
 ## Handover for independent QC review (step 10)
 
 Run `bash 10_make_handover.sh` on the login node. It needs no re-alignment and builds `OUTDIR/handover_<date>/` plus a `.tar.gz`:
