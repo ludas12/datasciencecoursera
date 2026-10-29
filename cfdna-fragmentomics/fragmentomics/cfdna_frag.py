@@ -229,6 +229,49 @@ def motif_features(frags):
     return freq, mds
 
 
+SIZE_CLASSES = [(50, 149), (150, 220), (221, 400), (401, 600), (601, 1000)]
+REF_CLASS = "150_220"  # mono-nucleosome fragments: the reference end-motif profile
+
+
+def js_divergence(p, q):
+    """Jensen-Shannon divergence (log2, 0 = identical, 1 = disjoint) of two frequency vectors."""
+    p, q = np.asarray(p, float), np.asarray(q, float)
+    m = (p + q) / 2
+
+    def kl(a, b):
+        ok = a > 0
+        return float((a[ok] * np.log2(a[ok] / b[ok])).sum())
+    return 0.5 * kl(p, m) + 0.5 * kl(q, m)
+
+
+def size_class_motifs(frags):
+    """End motifs by fragment-size class.
+
+    Tests whether long fragments are cfDNA or broken genomic DNA (e.g. cells lysed during
+    processing): nuclease-cut cfDNA keeps the same end preferences across sizes, randomly broken
+    DNA drifts towards background (higher diversity, larger divergence from mono-nucleosomes).
+    5' base fractions reflect the cutting enzyme (DFFB: A, DNASE1L3: C, DNASE1: T)."""
+    rows, freqs = [], {}
+    for lo, hi in SIZE_CLASSES:
+        sub = frags[frags.length.between(lo, hi)]
+        key = f"{lo}_{hi}"
+        if len(sub) < 1000:
+            rows.append({"size_class": key, "n": len(sub)})
+            continue
+        freq, mds = motif_features(sub)
+        freqs[key] = freq
+        first = pd.concat([sub.motif_5p, sub.motif_3p]).str[0].value_counts(normalize=True)
+        rows.append({"size_class": key, "n": len(sub), "motif_diversity_score": mds,
+                     "motif_CCCA": float(freq["CCCA"]),
+                     **{f"end_{b}": float(first.get(b, 0.0)) for b in "ACGT"}})
+    out = pd.DataFrame(rows).set_index("size_class")
+    out["frac_of_fragments"] = out.n / max(out.n.sum(), 1)
+    if REF_CLASS in freqs:
+        out["js_vs_mono"] = [js_divergence(freqs[k], freqs[REF_CLASS]) if k in freqs else np.nan
+                             for k in out.index]
+    return out
+
+
 def lowess_correct(counts, gc, frac=0.75):
     """DELFI-style GC correction: residual of a lowess fit of counts ~ GC, plus the median."""
     from statsmodels.nonparametric.smoothers_lowess import lowess
@@ -282,6 +325,8 @@ def features(args):
     full_len = frags.length[frags.length.between(args.min_len, MAX_LEN)
                             & frags.chrom.str.match(args.chroms)].values
     hist_full = np.bincount(full_len, minlength=MAX_LEN + 1)[: MAX_LEN + 1]
+    by_size = size_class_motifs(frags[frags.length.between(args.min_len, MAX_LEN)
+                                      & frags.chrom.str.match(args.chroms)])
     frags = frags[frags.length.between(args.min_len, args.max_len)]
 
     # Sex-chromosome fractions. In a sex-mismatched transplant (male donor -> female recipient)
@@ -299,6 +344,10 @@ def features(args):
     summary.update(sex)
     for m in ("CCCA", "CCAG", "CCTG", "TGGG"):  # motifs often reported shifted in cancer
         summary[f"motif_{m}"] = float(motif_freq[m])
+    for key in ("401_600", "601_1000"):  # long-fragment ends vs mono-nucleosome ends
+        if key in by_size.index and "js_vs_mono" in by_size:
+            summary[f"motif_CCCA_{key}"] = float(by_size.loc[key].get("motif_CCCA", np.nan))
+            summary[f"js_vs_mono_{key}"] = float(by_size.loc[key, "js_vs_mono"])
     bins = bin_features(frags, args.bin_size, args.reference + ".fai", args.chroms)
     summary["n_bins_pass"] = int(bins["pass"].sum())
     summary["sample"] = name
@@ -306,6 +355,7 @@ def features(args):
     pd.DataFrame({"length": np.arange(len(hist_full)), "count": hist_full}).to_csv(
         f"{args.out}/size_hist.tsv", sep="\t", index=False)
     motif_freq.rename("freq").rename_axis("motif").to_csv(f"{args.out}/end_motifs.tsv", sep="\t")
+    by_size.to_csv(f"{args.out}/size_class_motifs.tsv", sep="\t", float_format="%.5g")
     bins.to_csv(f"{args.out}/bins.tsv", sep="\t", index=False, float_format="%.5g")
     with open(f"{args.out}/summary.json", "w") as fh:
         json.dump(summary, fh, indent=2, default=float)
@@ -516,7 +566,7 @@ def cohort(args):
 
     os.makedirs(args.out, exist_ok=True)
     summaries, ratios, covs, motifs, hists = [], {}, {}, {}, {}
-    tss_sum, tss_prof = {}, {}
+    tss_sum, tss_prof, by_size = {}, {}, {}
     for d in args.inputs:
         with open(f"{d}/summary.json") as fh:
             s = json.load(fh)
@@ -529,6 +579,8 @@ def cohort(args):
         motifs[name] = pd.read_csv(f"{d}/end_motifs.tsv", sep="\t", index_col=0)["freq"]
         h = pd.read_csv(f"{d}/size_hist.tsv", sep="\t")["count"]
         hists[name] = h / h.sum()
+        if os.path.exists(f"{d}/size_class_motifs.tsv"):
+            by_size[name] = pd.read_csv(f"{d}/size_class_motifs.tsv", sep="\t")
         if os.path.exists(f"{d}/tss_summary.tsv"):
             tss_sum[name] = pd.read_csv(f"{d}/tss_summary.tsv", sep="\t").set_index("set")
             tss_prof[name] = pd.read_csv(f"{d}/tss_profiles.tsv", sep="\t", index_col=0)
@@ -557,6 +609,11 @@ def cohort(args):
     motif_m = pd.DataFrame(motifs).T.loc[order]
 
     summary.to_csv(f"{args.out}/size_motif_summary.tsv", sep="\t")
+    if by_size:  # end motifs by size class: long cfDNA vs broken genomic DNA
+        bs = pd.concat({n: by_size[n] for n in order if n in by_size}, names=["sample", "row"])
+        bs = bs.reset_index(level="row", drop=True)
+        bs.insert(0, "group", groups.loc[bs.index])
+        bs.to_csv(f"{args.out}/size_class_motifs.tsv", sep="\t", float_format="%.5g")
     ratio_m.to_csv(f"{args.out}/delfi_short_long_ratio.tsv", sep="\t", float_format="%.5g")
     cov_m.to_csv(f"{args.out}/coverage_norm.tsv", sep="\t", float_format="%.5g")
     motif_m.to_csv(f"{args.out}/end_motif_freq.tsv", sep="\t", float_format="%.6g")

@@ -183,6 +183,16 @@ fragments, roughly 10× lower at several million), so compare samples of similar
 Extra columns in `samples.tsv` (e.g. `patient`, `diagnosis`) are carried into the cohort tables.
 To recompute features for a finished run after a code update: `sbatch scripts/kaya_reanalyse.sbatch`.
 
+**Are long fragments cfDNA or broken genomic DNA?** `size_class_motifs.tsv` (per sample and
+in `cohort/`) gives end motifs for 50–149, 150–220, 221–400, 401–600 and 601–1000 bp fragments:
+CCCA, motif diversity, the 5′ base fractions (A: DFFB/apoptosis, C: DNASE1L3, T: DNASE1) and
+`js_vs_mono`, the Jensen–Shannon divergence of each class's end-motif profile from the
+mono-nucleosome class. Nuclease-cut cfDNA keeps similar end preferences across sizes (small
+`js_vs_mono`); DNA broken at random, e.g. from cells lysed during processing, drifts towards
+background (higher diversity and divergence). The summary carries `motif_CCCA_401_600`,
+`js_vs_mono_401_600` and the same for 601–1000 bp. Compare long-type and short-type BAL, and
+plasma long fragments from the same run.
+
 ## Low-coverage notes
 - **Depth needed:** size distribution and end motifs are stable from ~1M fragments. DELFI ratios at
   5 Mb bins work from ~0.1x (~1–2M fragments → a few thousand per bin). Use `--bin-size 10000000` below that.
