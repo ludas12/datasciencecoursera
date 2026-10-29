@@ -78,6 +78,17 @@ scripts/run_all.sh samples.tsv /ref/hg38.fa /ref/hg38-blacklist.v2.bed results 1
 Outputs in `results/cohort/`: `size_distribution.png`, `pca.png`, `delfi_ratio_heatmap.png`,
 `size_motif_summary.tsv` (one row per sample), `group_summary.tsv`, `alignment_qc.tsv`.
 
+**A new sequencing batch.** Build its sample sheet from the FASTQ folder, then fill in the
+`diagnosis` column from the clinical records:
+```bash
+python scripts/make_samples_tsv.py $WORK/fastq_batch2 -o samples_batch2.tsv
+```
+It names samples `<visit>_P` / `<visit>_BAL` (e.g. `CF0020A_BAL`), sets `group`, and adds
+`subject`, `timepoint`, `library` and `batch` columns, which `cohort` carries into its tables.
+Libraries split over several lanes are listed in `samples_batch2_merge_lanes.sh`; run it first.
+Point the Kaya jobs at it with `SHEET=samples_batch2.tsv` (default `samples.tsv`), write to a
+new `OUT` folder, and give a 25-library run more time (`--time=48:00:00`).
+
 **Mixing read lengths (pilot 2x75 bp, next batch 2x59 bp).** Read length does not change
 fragment lengths or end motifs, but it changes how many reads map uniquely (MAPQ >= 30), which
 affects coverage-based features (DELFI bins, TSS profiles). To compare batches directly, cut

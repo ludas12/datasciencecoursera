@@ -18,4 +18,4 @@ export READ_LEN=${READ_LEN:-0}   # e.g. 59: cut 2x75 bp pilot reads to match a 2
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "${CONDA_ENV:-cfdna-frag}"   # env name or path; override: sbatch --export=ALL,CONDA_ENV=fragtools ...
-scripts/run_all.sh samples.tsv "$REF" "$BLACKLIST" "$OUT" "${SLURM_CPUS_PER_TASK:-16}"
+scripts/run_all.sh "${SHEET:-samples.tsv}" "$REF" "$BLACKLIST" "$OUT" "${SLURM_CPUS_PER_TASK:-16}"
