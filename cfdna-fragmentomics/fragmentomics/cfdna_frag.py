@@ -89,21 +89,30 @@ def extract(args):
     if not chroms:
         sys.exit(f"No BAM contigs match --chroms {args.chroms!r}")
 
-    stats = dict(pairs_seen=0, kept=0, blacklisted=0)
+    stats = dict(pairs_seen=0, kept=0, blacklisted=0, not_proper_pair=0)
     first = True
     with gzip.open(args.out, "wt") as fh:
         for chrom in chroms:
             seq = fasta.fetch(chrom).upper()
             rows = []
             for r in bam.fetch(chrom):
-                if (r.is_unmapped or r.mate_is_unmapped or not r.is_paired or not r.is_proper_pair
+                if (r.is_unmapped or r.mate_is_unmapped or not r.is_paired
                         or r.is_secondary or r.is_supplementary or r.is_duplicate or r.is_qcfail):
                     continue
-                tlen = r.template_length
-                # one record per fragment: the leftmost read (tie -> read1)
-                if tlen <= 0 or (r.reference_start == r.next_reference_start and not r.is_read1):
+                if args.proper_only and not r.is_proper_pair:
+                    continue
+                tlen = abs(r.template_length)  # sign is unreliable when both reads start together
+                # One record per fragment: the forward read of a forward-reverse pair on one
+                # chromosome. The aligner's proper-pair flag is not required by default: bwa sets it
+                # from each library's own insert-size spread, so in plasma (tight around 167 bp) long
+                # fragments lose it far more often than in BAL, which biases long-fragment comparisons.
+                if (tlen == 0 or r.reference_id != r.next_reference_id
+                        or r.is_reverse or not r.mate_is_reverse
+                        or r.next_reference_start < r.reference_start):
                     continue
                 stats["pairs_seen"] += 1
+                if not r.is_proper_pair:
+                    stats["not_proper_pair"] += 1
                 mate_mq = r.get_tag("MQ") if r.has_tag("MQ") else r.mapping_quality
                 if min(r.mapping_quality, mate_mq) < args.min_mapq:
                     continue
@@ -818,6 +827,9 @@ def main(argv=None):
     e.add_argument("--blacklist", help="BED of regions to exclude (e.g. ENCODE hg38 blacklist v2)")
     e.add_argument("--min-mapq", type=int, default=30)
     e.add_argument("--min-len", type=int, default=20)
+    e.add_argument("--proper-only", action="store_true",
+                   help="keep only pairs the aligner flagged as proper (the pre-Nov-2026 behaviour; "
+                        "under-counts long fragments in libraries with a tight insert size)")
     e.add_argument("--chroms", default=AUTOSOMES_XY,
                    help="regex of contigs to keep (default autosomes + X + Y)")
     e.set_defaults(func=extract)

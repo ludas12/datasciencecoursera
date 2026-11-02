@@ -14,7 +14,9 @@ TSS_BED=${TSS_BED:-$WORK/ref/gencode_v46_tss.bed}
 REF=${REF:-/group/sbms001/hludewick/G4_data/hg38/hg38.fa}   # for GC correction
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate "${CONDA_ENV:-cfdna-frag}"
+DEFAULT_ENV=cfdna-frag
+[[ -d /group/sbms001/hludewick/conda/cfdna-frag ]] && DEFAULT_ENV=/group/sbms001/hludewick/conda/cfdna-frag
+conda activate "${CONDA_ENV:-$DEFAULT_ENV}"
 FRAG="python fragmentomics/cfdna_frag.py"
 # GENESETS=path/to/genesets.tsv to use other gene sets (e.g. fragmentomics/genesets_hpa.tsv)
 

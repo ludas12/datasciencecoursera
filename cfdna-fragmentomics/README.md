@@ -22,7 +22,8 @@ bwa-mem2 index hg38.fa && samtools faidx hg38.fa
 # 1. FASTQ -> duplicate-marked BAM
 scripts/01_preprocess.sh S1 S1_R1.fq.gz S1_R2.fq.gz hg38.fa bam/ 16
 
-# 2. BAM -> one row per fragment (MAPQ>=30, proper pairs, non-duplicate, autosomes, blacklist removed)
+# 2. BAM -> one row per fragment (MAPQ>=30, forward-reverse pairs on one chromosome up to 1000 bp,
+#    non-duplicate, autosomes, blacklist removed; --proper-only restores the old proper-pair filter)
 python fragmentomics/cfdna_frag.py extract -b bam/S1.bam -r hg38.fa \
     --blacklist hg38-blacklist.v2.bed -o frags/S1.frags.tsv.gz
 
@@ -197,6 +198,21 @@ observed value minus the null median (about 0 = same end profile), and `js_p_vs_
 one-sided p-value. The summary carries `motif_CCCA_401_600`, `js_vs_mono_401_600`,
 `js_excess_401_600`, `js_p_vs_null_401_600` and the same for 601–1000 bp. Compare long-type and short-type BAL, and
 plasma long fragments from the same run.
+
+## Proper pairs and long fragments (changed Nov 2026)
+
+`extract` used to keep only pairs the aligner flagged as proper. bwa sets that flag from each
+library's own insert-size spread, so in plasma (tight around 167 bp) long fragments lose it far
+more often than in BAL (broad sizes). That under-counts long plasma fragments and biases every
+BAL-vs-plasma comparison of long-fragment share, ladder and long-class end motifs. `extract` now
+keeps every forward-reverse pair on one chromosome up to 1000 bp and logs how many lacked the flag
+(`not_proper_pair`). Rebuild the fragment files from the BAMs (old ones go to `frags_proper_only/`):
+
+```bash
+sbatch --export=ALL,REEXTRACT=1 scripts/kaya_reanalyse.sbatch
+```
+
+The same caveat applies to MethylDackel in the EM-seq pipeline (`FRAG_ALL_PAIRS=true`).
 
 ## Low-coverage notes
 - **Depth needed:** size distribution and end motifs are stable from ~1M fragments. DELFI ratios at

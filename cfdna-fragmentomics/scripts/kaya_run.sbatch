@@ -17,5 +17,7 @@ export UMI_LEN=8      # 8 bp in-line block at the start of R1 and R2 (see FastQC
 export READ_LEN=${READ_LEN:-0}   # e.g. 59: cut 2x75 bp pilot reads to match a 2x59 bp batch (0 = off)
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate "${CONDA_ENV:-cfdna-frag}"   # env name or path; override: sbatch --export=ALL,CONDA_ENV=fragtools ...
+DEFAULT_ENV=cfdna-frag
+[[ -d /group/sbms001/hludewick/conda/cfdna-frag ]] && DEFAULT_ENV=/group/sbms001/hludewick/conda/cfdna-frag
+conda activate "${CONDA_ENV:-$DEFAULT_ENV}"   # env name or path; override: sbatch --export=ALL,CONDA_ENV=fragtools ...
 scripts/run_all.sh "${SHEET:-samples.tsv}" "$REF" "$BLACKLIST" "$OUT" "${SLURM_CPUS_PER_TASK:-16}"
