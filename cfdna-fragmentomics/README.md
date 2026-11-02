@@ -189,8 +189,13 @@ CCCA, motif diversity, the 5′ base fractions (A: DFFB/apoptosis, C: DNASE1L3, 
 `js_vs_mono`, the Jensen–Shannon divergence of each class's end-motif profile from the
 mono-nucleosome class. Nuclease-cut cfDNA keeps similar end preferences across sizes (small
 `js_vs_mono`); DNA broken at random, e.g. from cells lysed during processing, drifts towards
-background (higher diversity and divergence). The summary carries `motif_CCCA_401_600`,
-`js_vs_mono_401_600` and the same for 601–1000 bp. Compare long-type and short-type BAL, and
+background (higher diversity and divergence). Because a divergence near zero is inflated by
+sampling noise (more so for small classes), each class also gets a counting-noise null: both
+classes are redrawn from the mono-nucleosome profile at the observed numbers of ends (200 draws).
+`js_null_median`/`js_null_95` are the divergence expected from noise alone, `js_excess` is the
+observed value minus the null median (about 0 = same end profile), and `js_p_vs_null` is the
+one-sided p-value. The summary carries `motif_CCCA_401_600`, `js_vs_mono_401_600`,
+`js_excess_401_600`, `js_p_vs_null_401_600` and the same for 601–1000 bp. Compare long-type and short-type BAL, and
 plasma long fragments from the same run.
 
 ## Low-coverage notes

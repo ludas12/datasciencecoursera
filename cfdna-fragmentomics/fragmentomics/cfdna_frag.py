@@ -244,14 +244,33 @@ def js_divergence(p, q):
     return 0.5 * kl(p, m) + 0.5 * kl(q, m)
 
 
-def size_class_motifs(frags):
+def js_bootstrap(counts, ref_counts, n_boot=200, seed=0):
+    """Is a size class's end-motif divergence from the reference class more than counting noise?
+
+    A Jensen-Shannon divergence near zero is inflated by sampling noise, and the more so the
+    fewer fragments a class has. The null draws both classes from the reference profile at the
+    observed numbers of ends. js_null_median/js_null_95: divergence expected from noise alone;
+    js_excess: observed minus the null median (about 0 = same end profile);
+    js_p_vs_null: share of null draws at least as large as the observed value (one-sided)."""
+    rng = np.random.default_rng(seed)
+    n, n_ref = int(counts.sum()), int(ref_counts.sum())
+    p_ref = ref_counts / n_ref
+    obs = js_divergence(counts / n, p_ref)
+    null = np.array([js_divergence(rng.multinomial(n, p_ref) / n, rng.multinomial(n_ref, p_ref) / n_ref)
+                     for _ in range(n_boot)])
+    return {"js_null_median": float(np.median(null)), "js_null_95": float(np.percentile(null, 95)),
+            "js_excess": obs - float(np.median(null)),
+            "js_p_vs_null": float((1 + (null >= obs).sum()) / (1 + n_boot))}
+
+
+def size_class_motifs(frags, n_boot=200):
     """End motifs by fragment-size class.
 
     Tests whether long fragments are cfDNA or broken genomic DNA (e.g. cells lysed during
     processing): nuclease-cut cfDNA keeps the same end preferences across sizes, randomly broken
     DNA drifts towards background (higher diversity, larger divergence from mono-nucleosomes).
     5' base fractions reflect the cutting enzyme (DFFB: A, DNASE1L3: C, DNASE1: T)."""
-    rows, freqs = [], {}
+    rows, freqs, counts = [], {}, {}
     for lo, hi in SIZE_CLASSES:
         sub = frags[frags.length.between(lo, hi)]
         key = f"{lo}_{hi}"
@@ -260,6 +279,8 @@ def size_class_motifs(frags):
             continue
         freq, mds = motif_features(sub)
         freqs[key] = freq
+        counts[key] = pd.concat([sub.motif_5p, sub.motif_3p]).value_counts().reindex(
+            MOTIFS, fill_value=0).values.astype(float)
         first = pd.concat([sub.motif_5p, sub.motif_3p]).str[0].value_counts(normalize=True)
         rows.append({"size_class": key, "n": len(sub), "motif_diversity_score": mds,
                      "motif_CCCA": float(freq["CCCA"]),
@@ -269,6 +290,11 @@ def size_class_motifs(frags):
     if REF_CLASS in freqs:
         out["js_vs_mono"] = [js_divergence(freqs[k], freqs[REF_CLASS]) if k in freqs else np.nan
                              for k in out.index]
+        if n_boot:
+            stats = {k: js_bootstrap(counts[k], counts[REF_CLASS], n_boot)
+                     for k in out.index if k in counts and k != REF_CLASS}
+            for col in ("js_null_median", "js_null_95", "js_excess", "js_p_vs_null"):
+                out[col] = [stats[k][col] if k in stats else np.nan for k in out.index]
     return out
 
 
@@ -348,6 +374,9 @@ def features(args):
         if key in by_size.index and "js_vs_mono" in by_size:
             summary[f"motif_CCCA_{key}"] = float(by_size.loc[key].get("motif_CCCA", np.nan))
             summary[f"js_vs_mono_{key}"] = float(by_size.loc[key, "js_vs_mono"])
+            if "js_excess" in by_size:
+                summary[f"js_excess_{key}"] = float(by_size.loc[key, "js_excess"])
+                summary[f"js_p_vs_null_{key}"] = float(by_size.loc[key, "js_p_vs_null"])
     bins = bin_features(frags, args.bin_size, args.reference + ".fai", args.chroms)
     summary["n_bins_pass"] = int(bins["pass"].sum())
     summary["sample"] = name
