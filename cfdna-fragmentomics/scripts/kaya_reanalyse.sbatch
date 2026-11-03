@@ -23,8 +23,15 @@ DEFAULT_ENV=cfdna-frag
 [[ -d /group/sbms001/hludewick/conda/cfdna-frag ]] && DEFAULT_ENV=/group/sbms001/hludewick/conda/cfdna-frag
 conda activate "${CONDA_ENV:-$DEFAULT_ENV}"
 FRAG="python fragmentomics/cfdna_frag.py"
-ALIGN_REF=${ALIGN_REF:-$WORK/ref/hg38.fa}            # the FASTA the BAMs were aligned to
+# REEXTRACT needs the FASTA the BAMs were aligned to (check: samtools view -H BAM | grep '^@PG')
+# and the blacklist used in the first run. ALIGN_REF defaults to REF.
+ALIGN_REF=${ALIGN_REF:-$REF}
 BLACKLIST=${BLACKLIST:-$WORK/ref/hg38-blacklist.v2.bed}
+if [[ "${REEXTRACT:-0}" == 1 ]]; then
+    for f in "$ALIGN_REF" "$ALIGN_REF.fai" "$BLACKLIST"; do
+        [[ -s "$f" ]] || { echo "REEXTRACT: $f not found; set ALIGN_REF / BLACKLIST. Nothing changed." >&2; exit 1; }
+    done
+fi
 # GENESETS=path/to/genesets.tsv to use other gene sets (e.g. fragmentomics/genesets_hpa.tsv)
 
 SHEET=${SHEET:-samples.tsv}
@@ -34,8 +41,13 @@ tail -n +2 "$SHEET" | while IFS=$'\t' read -r S _; do
     if [[ "${REEXTRACT:-0}" == 1 ]]; then
         mkdir -p "$OUT/frags_proper_only"
         F="$OUT/frags/$S.frags.tsv.gz"
-        [[ -s "$F" && ! -e "$OUT/frags_proper_only/$S.frags.tsv.gz" ]] && mv "$F" "$OUT/frags_proper_only/"
-        $FRAG extract -b "$OUT/bam/$S.bam" -r "$ALIGN_REF" --blacklist "$BLACKLIST" -o "$F"
+        OLD="$OUT/frags_proper_only/$S.frags.tsv.gz"
+        # restore a file moved aside by an earlier run that stopped before rebuilding it
+        [[ ! -s "$F" && -s "$OLD" ]] && cp -p "$OLD" "$F"
+        # build the new file first; the old one is only replaced once this succeeds
+        $FRAG extract -b "$OUT/bam/$S.bam" -r "$ALIGN_REF" --blacklist "$BLACKLIST" -o "$F.tmp.gz"
+        [[ -s "$F" && ! -e "$OLD" ]] && mv "$F" "$OLD"
+        mv "$F.tmp.gz" "$F"
     fi
     $FRAG features -f "$OUT/frags/$S.frags.tsv.gz" -r "$REF" -o "$OUT/features/$S" -n "$S" --bin-size "$BIN"
     if [[ -s "$TSS_BED" ]]; then
