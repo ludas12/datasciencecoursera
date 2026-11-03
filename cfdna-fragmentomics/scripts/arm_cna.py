@@ -109,7 +109,7 @@ def main():
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        keys = list(arms.index)
+        keys = sorted(arms.index, key=lambda k: (int(k.split(':')[0][3:]), int(k.split(':')[1])))
         chroms = [k.rsplit(":", 1)[0] for k in keys]
         x = np.arange(len(keys))
         fig, axes = plt.subplots(len(a.plot), 1, figsize=(10, 2.2 * len(a.plot)), sharex=True, squeeze=False)
