@@ -82,7 +82,7 @@ def main():
     plt.rcParams.update({"font.size": 7, "font.family": "sans-serif", "axes.linewidth": 0.6})
     n = len(pr)
     fig = plt.figure(figsize=(7.2, 7.6))
-    gs = fig.add_gridspec(3, 1, height_ratios=[1.0, 1.15, 1.25], hspace=0.55)
+    gs = fig.add_gridspec(3, 1, height_ratios=[1.0, 1.15, 1.25], hspace=0.5)
 
     # A: size distributions, one small plot per pair
     ga = gs[0].subgridspec(1, n, wspace=0.12)
@@ -104,9 +104,10 @@ def main():
             ax.set_yticklabels([])
         if i == n // 2:
             ax.set_xlabel("Fragment length (bp)", fontsize=7)
-    fig.legend(handles=[plt.Line2D([], [], color=BAL_C, lw=1.2, label="BAL"),
-                        plt.Line2D([], [], color=PL_C, lw=1.0, label="Plasma, same visit")],
-               loc="upper right", bbox_to_anchor=(0.98, 0.995), ncol=2, frameon=False, fontsize=7)
+    ax.legend(handles=[plt.Line2D([], [], color=BAL_C, lw=1.2, label="BAL"),
+                       plt.Line2D([], [], color=PL_C, lw=1.0, label="Plasma,\nsame visit")],
+              loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=False, fontsize=6, handlelength=1.2,
+              borderaxespad=0.0)
 
     # B: paired features
     gb = gs[1].subgridspec(1, len(FEATURES), wspace=0.6)
@@ -177,7 +178,9 @@ def main():
         ax.set_xticks(range(len(CLASS_ORDER)), CLASS_LABEL)
         ax.set_xlabel("Fragment length (bp)", fontsize=7)
         ax.set_ylabel("Methylation vs 150-220 bp\n(highly methylated regions)", fontsize=7)
-        ax.legend(frameon=False, fontsize=7, loc="lower left")
+        libs = e[e.type.str.lower().isin(["plasma", "bal"])].library.nunique()
+        ax.legend(frameon=False, fontsize=7, loc="center left", bbox_to_anchor=(1.02, 0.5), title=f"EM-seq, R1\n({libs} libraries)",
+                  title_fontsize=7, alignment="left")
     else:
         ax.text(0.5, 0.5, "EM-seq size_profile.tsv not given (--emseq)", ha="center", transform=ax.transAxes,
                 fontsize=7)
