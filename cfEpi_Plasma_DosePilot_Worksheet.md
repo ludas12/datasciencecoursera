@@ -17,25 +17,27 @@ Standalone bench worksheet (capture steps folded in from Bench Protocol v1.3). T
 |---|---|
 | Plasma | One donor; ≥ 2 ml pooled from the same draw, mixed, split into 200 µl aliquots |
 | Mark | H3K4me3 (most robust) in duplicate per dose; IgG at the lowest and highest dose |
-| Doses (final, in 10 µl) | 25, 50, 100, 200 nM |
+| Doses (final, in 10 µl) | 12.5, 25, 50, 100, 200 nM |
 | S2 spike-in | 1 ng S2 chromatin per 200 µl plasma (target dm6 5–20%) |
-| Libraries | 10 total (8 H3K4me3 + 2 IgG) |
+| Libraries | 12 total (10 H3K4me3 + 2 IgG) |
 | Sequencing | ~5–10 M read pairs each; compare at a matched subsample (e.g. 3 M pairs) |
 
 ### Reaction map (assign a unique dual index to each — see CSV)
 
 | # | Library ID | Mark | Tn5 dose | Index (fill in) |
 |---|---|---|---|---|
-| 1 | PILOT_K4_25_a | H3K4me3 | 25 nM | |
-| 2 | PILOT_K4_25_b | H3K4me3 | 25 nM | |
-| 3 | PILOT_K4_50_a | H3K4me3 | 50 nM | |
-| 4 | PILOT_K4_50_b | H3K4me3 | 50 nM | |
-| 5 | PILOT_K4_100_a | H3K4me3 | 100 nM | |
-| 6 | PILOT_K4_100_b | H3K4me3 | 100 nM | |
-| 7 | PILOT_K4_200_a | H3K4me3 | 200 nM | |
-| 8 | PILOT_K4_200_b | H3K4me3 | 200 nM | |
-| 9 | PILOT_IgG_50 | IgG | 50 nM | |
-| 10 | PILOT_IgG_200 | IgG | 200 nM | |
+| 1 | PILOT_K4_12.5_a | H3K4me3 | 12.5 nM | |
+| 2 | PILOT_K4_12.5_b | H3K4me3 | 12.5 nM | |
+| 3 | PILOT_K4_25_a | H3K4me3 | 25 nM | |
+| 4 | PILOT_K4_25_b | H3K4me3 | 25 nM | |
+| 5 | PILOT_K4_50_a | H3K4me3 | 50 nM | |
+| 6 | PILOT_K4_50_b | H3K4me3 | 50 nM | |
+| 7 | PILOT_K4_100_a | H3K4me3 | 100 nM | |
+| 8 | PILOT_K4_100_b | H3K4me3 | 100 nM | |
+| 9 | PILOT_K4_200_a | H3K4me3 | 200 nM | |
+| 10 | PILOT_K4_200_b | H3K4me3 | 200 nM | |
+| 11 | PILOT_IgG_50 | IgG | 50 nM | |
+| 12 | PILOT_IgG_200 | IgG | 200 nM | |
 
 ## 3. Buffers and stocks (make fresh where noted)
 
@@ -60,6 +62,7 @@ Each reaction = 5 µl of 2× Tn5 working + 5 µl 2× tagmentation salts = 10 µl
 | Step | Recipe | Result |
 |---|---|---|
 | 5 µM intermediate | 4 µl loaded Tn5 (37.5 µM) + 26 µl dilution buffer | ~5 µM |
+| 25 nM working (→ 12.5 nM) | 50 µl of the 50 nM working + 50 µl dilution buffer | 25 nM |
 | 50 nM working (→ 25 nM) | 1 µl of 5 µM + 99 µl dilution buffer | 50 nM |
 | 100 nM working (→ 50 nM) | 2 µl of 5 µM + 98 µl | 100 nM |
 | 200 nM working (→ 100 nM) | 4 µl of 5 µM + 96 µl | 200 nM |
