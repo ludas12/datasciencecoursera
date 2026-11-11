@@ -1,7 +1,7 @@
 # cf-EpiTracing — Plasma Tn5 Dose Pilot
 
 **H. Ludewick · Version 1.0 · 9 November 2026**
-Standalone bench worksheet (capture steps folded in from Bench Protocol v1.3). Tn5 dose titration to optimise library complexity. H3K4me3, one donor.
+Standalone bench worksheet (capture steps folded in from Bench Protocol v1.3). Tn5 dose titration to optimise library complexity. H3K4me3 + IgG, one donor.
 
 ---
 
@@ -16,15 +16,13 @@ Standalone bench worksheet (capture steps folded in from Bench Protocol v1.3). T
 | Element | Choice |
 |---|---|
 | Plasma | One donor; ≥ 2 ml pooled from the same draw, mixed, split into 200 µl aliquots |
-| Mark | H3K4me3 only (one coupled stock, ~300 µl = 6 reactions). No IgG conjugate this run — single per dose |
+| Mark | H3K4me3 (6 doses, single per dose) + IgG at the top dose |
 | Doses (final, in 10 µl) | 12.5, 25, 50, 100, 150, 200 nM |
 | S2 spike-in | 1 ng S2 chromatin per 200 µl plasma (target dm6 5–20%) |
-| Libraries | 6 total (all H3K4me3) — limited by conjugated antibody |
+| Libraries | 7 total (6 H3K4me3 + 1 IgG) |
 | Sequencing | ~5–10 M read pairs each; compare at a matched subsample (e.g. 3 M pairs) |
 
-> **Note:** singlicate is a deliberate trade-off for a dose-finding pilot — 6 single doses define the complexity-vs-dose trend better than fewer doses in duplicate, and one technical failure still leaves a 5-point curve.
->
-> **No IgG caveat:** no IgG this run, so non-specific/ATAC-like background cannot be assessed — judge the pilot on the complexity-vs-dose trend only, and **include an IgG control in the confirmatory run** (your earlier batch had a contaminated IgG, so this check matters).
+> **Note:** singlicate is a deliberate trade-off for a dose-finding pilot — 6 single doses define the complexity-vs-dose trend better than fewer doses in duplicate, and one technical failure still leaves a 5-point curve. IgG sits at the top dose (200 nM): non-specific background rises with dose, so a clean 200 nM IgG means every lower dose is clean. Add replicates and more IgG doses in the confirmatory run.
 
 ### Reaction map (assign a unique dual index to each — see CSV)
 
@@ -36,10 +34,11 @@ Standalone bench worksheet (capture steps folded in from Bench Protocol v1.3). T
 | 4 | PILOT_K4_100 | H3K4me3 | 100 nM | |
 | 5 | PILOT_K4_150 | H3K4me3 | 150 nM | |
 | 6 | PILOT_K4_200 | H3K4me3 | 200 nM | |
+| 7 | PILOT_IgG_200 | IgG | 200 nM | |
 
 ## 2a. 96-well plate layout and equipment
 
-All 6 reactions run in **one row** of a 96-well plate (300 µl wells). cf-EpiTracing is CUT&Tag-type chemistry, so your colleagues' plate magnet + thermomixer workflow transfers directly.
+All 7 reactions run in **one row** of a 96-well plate (300 µl wells). cf-EpiTracing is CUT&Tag-type chemistry, so your colleagues' plate magnet + thermomixer workflow transfers directly.
 
 | Well | Library | Tn5 dose |
 |---|---|---|
@@ -49,6 +48,7 @@ All 6 reactions run in **one row** of a 96-well plate (300 µl wells). cf-EpiTra
 | A4 | K4_100 | 100 nM |
 | A5 | K4_150 | 150 nM |
 | A6 | K4_200 | 200 nM |
+| A7 | IgG_200 | 200 nM |
 
 - **Equipment:** low-bind 96-well plate, 300 µl wells; adhesive seal film; 96-well plate magnet; **Eppendorf ThermoMixer C with the ThermoTop heated lid** and the SmartBlock for your plate; thermocycler for PCR only. With the ThermoTop fitted, **every step up to PCR runs on the ThermoMixer C** — no evaporation of the small volumes.
 - **Magnet check:** confirm the magnet pellets the 2.8 µm M-270 beads cleanly in your wells (test with blank beads). Allow 3–5 min for the first separation out of viscous plasma.
@@ -126,12 +126,12 @@ Each reaction = 5 µl of 2× Tn5 working + 5 µl 2× tagmentation salts = 10 µl
 ## 6. Read-outs (pipeline as for run 20261026)
 - Library yield after 21 cycles (TapeStation nM) and fragment-size profile.
 - Unique human fragments (MAPQ ≥ 30, duplicates removed) and duplication % at a matched subsample.
-- TSS/flank, FRiP, % reads at TSS ± 1 kb; peak count. (No IgG this run — add an IgG background track in the confirmatory run.)
+- TSS/flank, FRiP, % reads at TSS ± 1 kb; IgG background and peak count.
 - Sequenced fragment-size mode (was ~55–65 bp; watch whether lower doses shift it up toward ~150 bp).
 - dm6 (S2) fraction per library (target 5–20%).
 
 ## 7. Decision
-- Pick the dose with the **most unique fragments** at matched depth, provided TSS/flank and FRiP fall by ≤ ~10% vs 100 nM. (Confirm IgG is clean at the chosen dose in the confirmatory run.)
+- Pick the dose with the **most unique fragments** at matched depth, provided TSS/flank and FRiP fall by ≤ ~10% vs 100 nM and the 200 nM IgG stays clean.
 - **Complexity peaks at a lower dose (25–50 nM)** with the fragment mode shifting up toward ~150 bp → 100 nM was over-tagmenting the cfDNA; adopt the lower dose.
 - **Complexity rises with dose to 200 nM** with enrichment held → adopt the higher dose.
 - **No dose improves unique fragments by ≥ 1.5×** → the limit is capture/recovery, not Tn5 dose; move to antibody/bead amount and wash losses.

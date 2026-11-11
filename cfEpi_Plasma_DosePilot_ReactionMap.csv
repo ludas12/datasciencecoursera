@@ -5,3 +5,4 @@ Number,Well,Library_ID,Mark,Antibody,Tn5_dose_nM,Tn5_working_2x_nM,Plasma_uL,S2_
 4,A4,PILOT_K4_100,H3K4me3,Diagenode C15200152,100,200,200,1,21,,,
 5,A5,PILOT_K4_150,H3K4me3,Diagenode C15200152,150,300,200,1,21,,,
 6,A6,PILOT_K4_200,H3K4me3,Diagenode C15200152,200,400,200,1,21,,,
+7,A7,PILOT_IgG_200,IgG,Normal IgG (host-matched),200,400,200,1,21,,,
