@@ -58,6 +58,7 @@ All 12 reactions run in **one row** of a 96-well plate (300 µl wells). cf-EpiTr
 - **Washes (5.2):** on the plate magnet, **200 µl per wash**; use **4× wash buffer + 1× 10 mM Tris** (one extra wash to offset the smaller volume). Resuspend off-magnet with a brief ThermoMixer pulse (~1,500 rpm) or by pipetting.
 - **Tagmentation / lysis / quench (5.3–5.5):** same plate on the **ThermoMixer C with the ThermoTop** (37 / 55 / 37 °C), sealed, gentle mix (~500–800 rpm) or static. The ThermoTop prevents evaporation/condensation of the 10–17 µl volumes.
 - **PCR (5.6):** transfer each **17 µl quenched bead slurry** to a 96-well PCR plate, add PCR mix, cycle in the thermocycler. (If your 300 µl plate is thermocycler-rated, add PCR mix and cycle in place — no transfer.)
+- **Sealing:** use a **peelable adhesive plate film** (optically clear or pierceable foil) for the capture and enzymatic steps — peel and apply a **fresh** film each time you add a reagent (lysis, then quench); press flat with a sealing roller so it survives capture mixing and seats evenly under the ThermoTop. For **PCR** use a **thermocycling-rated seal** (PCR foil or clear PCR film rated ~100 °C, or heat-seal). Avoid Parafilm and non-temperature-rated storage films. Seal first, then fit the ThermoTop.
 - **First run:** keep **1–2 reactions in tube format in parallel** as a format control.
 
 ## 3. Buffers and stocks (make fresh where noted)
