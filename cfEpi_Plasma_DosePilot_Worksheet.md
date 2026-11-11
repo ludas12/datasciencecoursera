@@ -16,41 +16,37 @@ Standalone bench worksheet (capture steps folded in from Bench Protocol v1.3). T
 | Element | Choice |
 |---|---|
 | Plasma | One donor; ≥ 2 ml pooled from the same draw, mixed, split into 200 µl aliquots |
-| Mark | H3K4me3 (most robust) in duplicate per dose; IgG at the lowest and highest dose |
+| Mark | H3K4me3 (most robust), single per dose — no replicate (conjugate-limited); IgG at the top dose |
 | Doses (final, in 10 µl) | 12.5, 25, 50, 100, 200 nM |
 | S2 spike-in | 1 ng S2 chromatin per 200 µl plasma (target dm6 5–20%) |
-| Libraries | 12 total (10 H3K4me3 + 2 IgG) |
+| Libraries | 6 total (5 H3K4me3 + 1 IgG) — limited by conjugated antibody |
 | Sequencing | ~5–10 M read pairs each; compare at a matched subsample (e.g. 3 M pairs) |
+
+> **Note:** singlicate is a deliberate trade-off for a dose-finding pilot — 5 single doses define the complexity-vs-dose trend better than fewer doses in duplicate, and one technical failure still leaves a 4-point curve. IgG sits at the top dose (200 nM): background rises with dose, so a clean 200 nM IgG means every lower dose is clean. Add replicates and more IgG doses in the confirmatory run.
 
 ### Reaction map (assign a unique dual index to each — see CSV)
 
 | # | Library ID | Mark | Tn5 dose | Index (fill in) |
 |---|---|---|---|---|
-| 1 | PILOT_K4_12.5_a | H3K4me3 | 12.5 nM | |
-| 2 | PILOT_K4_12.5_b | H3K4me3 | 12.5 nM | |
-| 3 | PILOT_K4_25_a | H3K4me3 | 25 nM | |
-| 4 | PILOT_K4_25_b | H3K4me3 | 25 nM | |
-| 5 | PILOT_K4_50_a | H3K4me3 | 50 nM | |
-| 6 | PILOT_K4_50_b | H3K4me3 | 50 nM | |
-| 7 | PILOT_K4_100_a | H3K4me3 | 100 nM | |
-| 8 | PILOT_K4_100_b | H3K4me3 | 100 nM | |
-| 9 | PILOT_K4_200_a | H3K4me3 | 200 nM | |
-| 10 | PILOT_K4_200_b | H3K4me3 | 200 nM | |
-| 11 | PILOT_IgG_50 | IgG | 50 nM | |
-| 12 | PILOT_IgG_200 | IgG | 200 nM | |
+| 1 | PILOT_K4_12.5 | H3K4me3 | 12.5 nM | |
+| 2 | PILOT_K4_25 | H3K4me3 | 25 nM | |
+| 3 | PILOT_K4_50 | H3K4me3 | 50 nM | |
+| 4 | PILOT_K4_100 | H3K4me3 | 100 nM | |
+| 5 | PILOT_K4_200 | H3K4me3 | 200 nM | |
+| 6 | PILOT_IgG_200 | IgG | 200 nM | |
 
 ## 2a. 96-well plate layout and equipment
 
-All 12 reactions run in **one row** of a 96-well plate (300 µl wells). cf-EpiTracing is CUT&Tag-type chemistry, so your colleagues' plate magnet + thermomixer workflow transfers directly.
+All 6 reactions run in **one row** of a 96-well plate (300 µl wells). cf-EpiTracing is CUT&Tag-type chemistry, so your colleagues' plate magnet + thermomixer workflow transfers directly.
 
-| Well | Library | Well | Library |
-|---|---|---|---|
-| A1 | K4_12.5_a | A7 | K4_100_a |
-| A2 | K4_12.5_b | A8 | K4_100_b |
-| A3 | K4_25_a | A9 | K4_200_a |
-| A4 | K4_25_b | A10 | K4_200_b |
-| A5 | K4_50_a | A11 | IgG_50 |
-| A6 | K4_50_b | A12 | IgG_200 |
+| Well | Library | Tn5 dose |
+|---|---|---|
+| A1 | K4_12.5 | 12.5 nM |
+| A2 | K4_25 | 25 nM |
+| A3 | K4_50 | 50 nM |
+| A4 | K4_100 | 100 nM |
+| A5 | K4_200 | 200 nM |
+| A6 | IgG_200 | 200 nM |
 
 - **Equipment:** low-bind 96-well plate, 300 µl wells; adhesive seal film; 96-well plate magnet; **Eppendorf ThermoMixer C with the ThermoTop heated lid** and the SmartBlock for your plate; thermocycler for PCR only. With the ThermoTop fitted, **every step up to PCR runs on the ThermoMixer C** — no evaporation of the small volumes.
 - **Magnet check:** confirm the magnet pellets the 2.8 µm M-270 beads cleanly in your wells (test with blank beads). Allow 3–5 min for the first separation out of viscous plasma.
