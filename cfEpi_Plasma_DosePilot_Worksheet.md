@@ -39,6 +39,27 @@ Standalone bench worksheet (capture steps folded in from Bench Protocol v1.3). T
 | 11 | PILOT_IgG_50 | IgG | 50 nM | |
 | 12 | PILOT_IgG_200 | IgG | 200 nM | |
 
+## 2a. 96-well plate layout and equipment
+
+All 12 reactions run in **one row** of a 96-well plate (300 µl wells). cf-EpiTracing is CUT&Tag-type chemistry, so your colleagues' plate magnet + thermomixer workflow transfers directly.
+
+| Well | Library | Well | Library |
+|---|---|---|---|
+| A1 | K4_12.5_a | A7 | K4_100_a |
+| A2 | K4_12.5_b | A8 | K4_100_b |
+| A3 | K4_25_a | A9 | K4_200_a |
+| A4 | K4_25_b | A10 | K4_200_b |
+| A5 | K4_50_a | A11 | IgG_50 |
+| A6 | K4_50_b | A12 | IgG_200 |
+
+- **Equipment:** low-bind 96-well plate, 300 µl wells; adhesive seal film; 96-well plate magnet; thermomixer (5–99 °C); thermocycler for PCR.
+- **Magnet check:** confirm the magnet pellets the 2.8 µm M-270 beads cleanly in your wells (test with blank beads). Allow 3–5 min for the first separation out of viscous plasma.
+- **Capture (5.1):** 300 µl plate on the thermomixer at **5 °C, overnight**, with mixing that keeps M-270 suspended (intermittent ~1,500 rpm 10 s every 2 min, or continuous ~800–1,000 rpm — check beads don't settle). Seal the plate.
+- **Washes (5.2):** on the plate magnet, **200 µl per wash**; use **4× wash buffer + 1× 10 mM Tris** (one extra wash to offset the smaller volume). Resuspend off-magnet by pipetting or a brief thermomixer pulse.
+- **Tagmentation / lysis / quench (5.3–5.5):** same plate on the thermomixer (37 / 55 / 37 °C), sealed, gentle mix (~500–800 rpm) or static. These are 10–17 µl — **seal well and use a heated lid (e.g. Thermotop) if you have one** to stop evaporation; otherwise run these three steps in a PCR plate on the thermocycler instead.
+- **PCR (5.6):** transfer each **17 µl quenched bead slurry** to a 96-well PCR plate, add PCR mix, cycle in the thermocycler. (If your 300 µl plate is thermocycler-rated, add PCR mix and cycle in place — no transfer.)
+- **First run:** keep **1–2 reactions in tube format in parallel** as a format control.
+
 ## 3. Buffers and stocks (make fresh where noted)
 
 | Buffer | Composition | Notes |
