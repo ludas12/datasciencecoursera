@@ -143,3 +143,22 @@ Each reaction = 5 µl of 2× Tn5 working + 5 µl 2× tagmentation salts = 10 µl
 - **DTT:** add to dilution buffer fresh (1 mM) on the day; discard spiked buffer at day end.
 - Never vortex Tn5; mix by gentle pipetting; keep on ice/cold block.
 - Load Tn5 fresh from the premix in single-use aliquots; the loaded transposome (~37% glycerol) is perishable.
+
+## 9. Results
+
+### 9.1 Qubit library yield (12 Nov 2026, dsDNA HS, post double-1.2× SPRI)
+
+| Lab ID | Library | Dose | Index (i7) | Qubit (ng/µl) |
+|---|---|---|---|---|
+| P1_K4 | PILOT_K4_12.5 | 12.5 nM | 7217 | 2.94 |
+| P2_K4 | PILOT_K4_25 | 25 nM | 7218 | 4.66 |
+| P3_K4 | PILOT_K4_50 | 50 nM | 7219 | 6.20 |
+| P4_K4 | PILOT_K4_100 | 100 nM | 7220 | 8.60 |
+| P5_K4 | PILOT_K4_150 | 150 nM | 7221 | 8.36 |
+| P6_K4 | PILOT_K4_200 | 200 nM | 7222 | 14.2 |
+| P7_IgG | PILOT_IgG_200 | 200 nM | 7223 | 35.8 |
+
+- **Trend:** H3K4me3 yield rises monotonically with dose (2.94 → 14.2 ng/µl, 12.5 → 200 nM; 100/150 plateau, jump at 200). All libraries have ample material for sequencing. i5 index 519 for all.
+- **Caveat:** yield is not complexity (v1.3 §7.2 — libraries plateau at 21 cycles with pg input; judge by sequencing, not ng/µl). Rising yield does NOT mean 200 nM is best — it can be more unique molecules OR more duplicates/dimer/background.
+- **IgG flag:** IgG at 200 nM (35.8 ng/µl) is **higher than every H3K4me3 library** (2.5× the 200 nM mark). Consistent with the "IgG can exceed mark yield at plateau" phenomenon, but a flag that non-specific/ATAC-like background is high at the top dose — argues against adopting 200 nM. Sequencing (and the IgG profile on the tape) will show whether it is background chromatin or a capture issue (cf. earlier contaminated IgG, cfEpi_24).
+- **Next:** TapeStation (fragment size per dose — watch for a short-fragment shift at 150/200 nM; adapter-dimer %; IgG profile over 170–1,000 bp), then pool and shallow-sequence (5–10 M pairs each). Decide on unique fragments / FRiP / TSS at matched depth (Section 7).
