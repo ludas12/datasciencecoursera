@@ -163,3 +163,21 @@ Each reaction = 5 µl of 2× Tn5 working + 5 µl 2× tagmentation salts = 10 µl
 - **IgG flag:** IgG at 200 nM (35.8 ng/µl) is **higher than every H3K4me3 library** (2.5× the 200 nM mark). Consistent with the "IgG can exceed mark yield at plateau" phenomenon, but a flag that non-specific/ATAC-like background is high at the top dose — argues against adopting 200 nM. Sequencing (and the IgG profile on the tape) will show whether it is background chromatin or a capture issue (cf. earlier contaminated IgG, cfEpi_24).
 - **Next:** TapeStation (fragment size per dose — watch for a short-fragment shift at 150/200 nM; adapter-dimer %; IgG profile over 170–1,000 bp), then pool and shallow-sequence. Decide on unique fragments / FRiP / TSS at matched depth (Section 7).
 - **Sequencing request:** ~8–10 M read pairs per library, 2×50 bp symmetric → **~60 M pairs total** for the 7-library pool (5 M each ≈ 35 M if economising). Do not exceed ~10–15 M/library — the earlier libraries saturated at 0.5–2.3 M unique molecules, so extra reads only add duplicates. Add ~10–20% for dm6 (S2) reads. Read length doesn't affect enrichment metrics (v1.3 §7.5). Equal depth across all 7 is fine; IgG may take slightly less. Pool to equal molarity over 170–1,000 bp (pooling calculator).
+
+### 9.2 TapeStation D5000 (16 Nov 2026, region 170–1,000 bp)
+
+| Dose | Avg size (bp) | Conc (ng/µl) | Region molarity (nM) | % in region |
+|---|---|---|---|---|
+| 12.5 nM | 435 | 3.34 | 14.5 | 72 |
+| 25 nM | 428 | 6.30 | 28.0 | 78 |
+| 50 nM | 414 | 6.93 | 31.8 | 78 |
+| 100 nM | 413 | 11.9 | 54.8 | 80 |
+| 150 nM | 406 | 8.56 | 40.0 | 82 |
+| 200 nM | 423 | 17.8 | 81.6 | 80 |
+| IgG 200 nM | 421 | 35.3 | 158 | 87 |
+
+- **No over-tagmentation:** fragment size is FLAT across the whole dose range (406–435 bp) despite 16× more Tn5. In chromatin tagmentation, size is set by nucleosome spacing, not enzyme amount, so dose changes YIELD not size. Every library has a clean nucleosomal profile (peak ~250–600 bp, tail to ~1 kb).
+- **IgG background confirmed:** IgG at 200 nM is a real, full-sized nucleosomal library (158 nM region molarity, same shape as the marks) — LARGER than any H3K4me3, not just dimer. Genuine non-specific/ATAC-like capture at the top dose (IgG > specific mark = poor specificity at 200 nM). Argues against 200 nM; favour a lower dose.
+- **Yield trend:** rises with dose but noisy; 150 nM dipped (40 vs 100 nM 54.8) — technical (singlicate well), not a dose effect (Qubit agreed). Dimer modest everywhere (double-SPRI worked).
+- **Pooling:** pool over 170–1,000 bp (NOT 200–700 — that clips the ~200 bp leading edge and the di/tri-nucleosomal tail). Dilute each to 4 nM (all ≥14.5 nM), pool to equal reads; IgG may take slightly less.
+- **Read:** all doses give good-shaped libraries → choice is yield vs background, likely sweet spot ~50–100 nM. The tape can't measure complexity/specificity; sequencing (unique fragments, FRiP, H3K4me3:IgG) decides.
