@@ -42,3 +42,47 @@ Horizontal left-to-right flow, 8 numbered steps joined by arrows, all shown happ
 
 ## When to finalise
 Add a results panel (e.g. complexity-vs-dose, tube-vs-plate equivalence) only **after** the pilot sequencing confirms the format works and the dose is set — then promote from "draft" to a method figure.
+
+---
+
+## BioRender asset map (templates + icon packs)
+
+Editing templates/icons in the BioRender editor is free (no AI credits). Open → duplicate → adapt.
+
+### Icon packs (toolbox — grab individual icons)
+- **Heating Instruments** → ThermoMixer C / heat block — https://app.biorender.com/biorender-templates/details/t-649608880c342739f6a86036?source=mcp
+- **Magnets in Chemistry** → plate / ring magnet — https://app.biorender.com/biorender-templates/details/t-640e70ab386eba8e0f74d815?source=mcp
+- **Tubes** → plasma tube, PCR tube — https://app.biorender.com/biorender-templates/details/t-633f362403394e304035dc31?source=mcp
+- **Cell Culture & Plates (Editable Icons)** → 96-well plate — https://app.biorender.com/biorender-templates/details/t-608c4592da41a600a3a682c8?source=mcp
+- **Lab and Machines** → thermocycler, vacuum aspirator, sequencer — https://app.biorender.com/biorender-templates/details/t-5fb581cc00cf4e00b0cefc84?source=mcp
+- **Primer** → i5/i7 index primers — https://app.biorender.com/biorender-templates/details/t-63a38430aebcba548dcc924f?source=mcp
+- **Epigenetics** → nucleosome / histone marks — https://app.biorender.com/biorender-templates/details/t-6064c3233d2ca1009f4b0f1f?source=mcp
+
+### Element → source
+| Figure element | Best source | Template ID |
+|---|---|---|
+| Panel/step scaffold | Blank Panels, 4 Step | 6175caa057e93400aeaf2637 |
+| Panel/step scaffold (alt) | qPCR 4 Steps | 63a26af456a41b7e85601c1c |
+| 1. Plasma input | Tubes pack + Liquid Biopsy | 5e1f35b66bca230087062b15 |
+| 2. Bead capture + S2 | CUT&RUN Procedure | 5f872753c2ef9200ab24e4c3 |
+| 2. (bead IP detail) | Immunoprecipitation With Magnetic Beads | 67acf95b4937b4a7c2099a5c |
+| 3. Magnetic wash | Magnets pack + plate icons | 640e70ab386eba8e0f74d815 |
+| 4. Tn5 tagmentation (base) | ATAC Sequencing | 6009a62628bf69021fdcdc04 |
+| 4. (transposase mechanism) | Mechanism of Transposable Mobilization | 5fff153e7fd8e600a4dac80f |
+| 5/6. Lysis / Quench | Tubes pack + STOP/scissors | 633f362403394e304035dc31 |
+| 7. Dual-index PCR | Polymerase Chain Reaction (PCR) | 5cf004269cf1ff003377d8cd |
+| 8. SPRI → cleanup | DNA Extraction | 5e68048a10234378502a316b |
+| 8. Flow cell / sequencing | Next Generation Sequencing (Illumina) | 5ef134a11c72b100ad8d13ac |
+| Sequencing workflow (alt) | Next Generation Sequencing Workflow | 62ccc36459dc10d0850c42df |
+| ChIP framing (alt base) | ChIP sequencing | 5f20a148563a0600ad9d9f87 |
+| 96-well plate motif | 96-well Plate with Callout | 6175c62132211700aefc962c |
+
+### Recommended build
+1. Open **ATAC Sequencing** (6009a62628bf69021fdcdc04) as the base — keeps the Tn5 tagmentation visuals.
+2. Add antibody-bead capture from **CUT&RUN Procedure** (5f872753c2ef9200ab24e4c3) as steps 2–3.
+3. Lay the 8 steps on the **Blank 4-Step panel** scaffold (6175caa057e93400aeaf2637), duplicated for 8, over the **96-well plate** motif.
+4. Pull nucleosome/histone icons from the **Epigenetics** pack; equipment icons from **Heating Instruments / Magnets / Lab and Machines**; flow cell from **NGS (Illumina)**.
+5. Relabel the 8 steps from the brief above; keep the Draft / dose-TBD framing.
+
+### AI option
+To generate the custom figure in one shot, top up 5 BioRender AI credits (https://app.biorender.com/account/ai-credits), then it is a one-step generation from the prepared prompt.
